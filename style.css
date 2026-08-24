@@ -104,6 +104,19 @@ main {
 }
 .capture-btn.secondary { background: #f6f5f0; color: var(--ink); border-color: var(--border); }
 
+.paste-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+
 .ocr-progress-wrap { margin-top: 14px; }
 .ocr-progress-bar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
 .ocr-progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s; }

@@ -296,6 +296,187 @@ function parseReceiptText(text) {
   return { date, store, items, totalGuess };
 }
 
+// ------------------- 카톡/문자 텍스트 붙여넣기 파싱 -------------------
+
+const MSG_NOISE_RE = /Web\s*발신|승인|일시불|할부|누적|잔액|한도|국민카드|삼성카드|현대카드|신한카드|롯데카드|하나카드|우리카드|NH농협카드|nh농협카드|BC카드|bc카드|카카오뱅크|케이뱅크|토스뱅크|카카오페이|네이버페이|체크카드|신용카드|출금|입금|취소|잔여|가맹점|안내/gi;
+const MSG_AMOUNT_RE = /\d{1,3}(?:,\d{3})+\s*원|\d+\s*원/g;
+const MSG_FILLER_ACTION_RE = /(결제함|결제했어요|결제했|결제|썼어요|썼음|썼다|냈어요|냈어|냈다|샀어요|샀음|샀다|마셨어요|마심|마셨|먹었어요|먹음|먹었|지출함|지출|구매함|구매했|구매|이용함|이용했|이용|낸것같음|낸듯|함\.?|했어\.?|했다\.?)/g;
+
+function toLocalISODate(d) {
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d - tz).toISOString().slice(0, 10);
+}
+
+function splitIntoMessageBlocks(text) {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  let blocks = normalized.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+
+  if (blocks.length <= 1) {
+    const reSplit = normalized.split(/(?=\[Web\s*발신\])/).map((b) => b.trim()).filter(Boolean);
+    if (reSplit.length > 1) blocks = reSplit;
+  }
+
+  if (blocks.length <= 1) {
+    const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
+    const priceLines = lines.filter((l) => /\d{1,3}(,\d{3})*\s*원/.test(l));
+    if (priceLines.length > 1 && lines.length <= priceLines.length * 2) {
+      blocks = lines;
+    }
+  }
+  return blocks;
+}
+
+function parseSingleMessageBlock(block) {
+  const raw = block.trim();
+  if (!raw) return null;
+
+  const amtMatches = [...raw.matchAll(/(\d{1,3}(?:,\d{3})+|\d+)\s*원/g)];
+  if (!amtMatches.length) return null;
+
+  let amount = null;
+  for (const m of amtMatches) {
+    const context = raw.slice(Math.max(0, m.index - 8), m.index + m[0].length + 8);
+    if (/누적|잔액|한도/.test(context)) continue;
+    amount = Number(m[1].replace(/,/g, ""));
+    break;
+  }
+  if (amount == null) amount = Number(amtMatches[0][1].replace(/,/g, ""));
+  if (!amount || amount < 100) return null;
+
+  let date = todayStr();
+  const dm1 = raw.match(DATE_RE);
+  const dm2 = raw.match(/(\d{1,2})[\/.](\d{1,2})\s+\d{1,2}:\d{2}/);
+  const dm3 = raw.match(/(?:^|[^\d])(\d{1,2})[\/.](\d{1,2})(?!\d)/);
+  if (dm1) {
+    const y = dm1[1];
+    const m = String(dm1[2]).padStart(2, "0");
+    const d = String(dm1[3]).padStart(2, "0");
+    if (Number(m) >= 1 && Number(m) <= 12 && Number(d) >= 1 && Number(d) <= 31) date = `${y}-${m}-${d}`;
+  } else if (dm2 || dm3) {
+    const mm = String((dm2 || dm3)[1]).padStart(2, "0");
+    const dd = String((dm2 || dm3)[2]).padStart(2, "0");
+    if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) {
+      const y = new Date().getFullYear();
+      date = `${y}-${mm}-${dd}`;
+    }
+  } else if (/어제/.test(raw)) {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    date = toLocalISODate(d);
+  } else if (/그제|엊그제/.test(raw)) {
+    const d = new Date();
+    d.setDate(d.getDate() - 2);
+    date = toLocalISODate(d);
+  }
+
+  let store = "";
+  let item = "";
+
+  // 1) "OO에서" 패턴 → 매장명 + 이후 텍스트에서 품목 추출 (캐주얼 채팅체)
+  const eseoMatch = raw.match(/([가-힣A-Za-z0-9&.\s]{2,20}?)에서\s/);
+  if (eseoMatch) {
+    let cand = eseoMatch[1].trim();
+    cand = cand.replace(/^(오늘|어제|그제|아까|방금|저번에|지난번에)\s*/, "").trim();
+    if (cand && cand.length <= 20) {
+      store = cand;
+      const amtMatch = raw.match(MSG_AMOUNT_RE);
+      const afterEseoIdx = eseoMatch.index + eseoMatch[0].length;
+      const amtIdx = amtMatch ? raw.indexOf(amtMatch[0], afterEseoIdx - 20) : -1;
+      if (amtIdx > afterEseoIdx) {
+        const between = raw.slice(afterEseoIdx, amtIdx).replace(MSG_FILLER_ACTION_RE, "").trim();
+        if (between && between.length <= 14) item = between;
+      }
+    }
+  }
+
+  // 2) 매장명을 못 찾았으면: 줄 단위로 검사, 노이즈/금액/날짜/시간/마스킹된 이름 줄을 제외하고
+  //    남는 줄 중 "마지막" 후보를 매장명으로 사용 (카드 승인 문자는 보통 매장명이 뒤쪽에 옴)
+  if (!store) {
+    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    let lastCandidate = "";
+    for (const line of lines) {
+      if (/\d{1,3}(,\d{3})*\s*원/.test(line)) continue;
+      if (/^\d{1,2}[\/.]\d{1,2}/.test(line)) continue;
+      if (/^\d{1,2}:\d{2}/.test(line)) continue;
+      if (/\*.{0,6}\(\d{2,}\)/.test(line)) continue; // 마스킹된 이름(홍*동(1234)) 제외
+      MSG_NOISE_RE.lastIndex = 0;
+      if (MSG_NOISE_RE.test(line)) continue;
+      if (line.replace(/[^가-힣A-Za-z]/g, "").length < 2) continue;
+      lastCandidate = line.replace(/\(\d+\)/, "").trim();
+    }
+    if (lastCandidate) store = lastCandidate;
+  }
+
+  const feeMatch = raw.match(/([가-힣]{2,8}(?:비|값|요금))\s*[:\-]?\s*\d[\d,]*\s*원/);
+
+  // 3) 한 줄짜리 문자 등, 위 방법으로도 못 찾았으면: 노이즈/금액/날짜/필러 단어를 모두
+  //    제거하고 남는 텍스트를 매장명(겸 품목)으로 사용
+  //    (단, "OO비/값/요금"처럼 항목 설명일 뿐 매장명이 아닌 경우는 제외)
+  if (!store && !feeMatch) {
+    MSG_NOISE_RE.lastIndex = 0;
+    let cleaned = raw
+      .replace(/\[[^\]]*\]/g, "") // [Web발신], [삼성카드] 등 대괄호 전체 제거
+      .replace(MSG_NOISE_RE, "")
+      .replace(MSG_AMOUNT_RE, "")
+      .replace(/\d{1,2}[\/.]\d{1,2}(\s+\d{1,2}:\d{2})?/g, "")
+      .replace(/\(\d+\)/g, "")
+      .replace(/[\n\r]/g, " ")
+      .replace(MSG_FILLER_ACTION_RE, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    cleaned = cleaned.replace(/[.,\-–_:]+$/, "").trim();
+    if (cleaned) store = cleaned.slice(0, 20);
+  }
+
+  if (feeMatch && !item) item = feeMatch[1];
+  if (!item) item = store || "지출";
+  item = item.replace(/[.,\-–_:]+$/, "").trim() || "지출";
+
+  return { date, store, item, amount };
+}
+
+// 카톡/문자 등 붙여넣은 텍스트에서 여러 건의 지출을 추출해 리뷰 카드 형식으로 변환
+function parseMessageText(rawText) {
+  const blocks = splitIntoMessageBlocks(rawText);
+  const parsedTxs = blocks.map(parseSingleMessageBlock).filter((t) => t && t.amount);
+  if (!parsedTxs.length) return null;
+
+  const dates = [...new Set(parsedTxs.map((t) => t.date))];
+  const stores = [...new Set(parsedTxs.map((t) => t.store).filter(Boolean))];
+  const commonDate = dates.length === 1 ? dates[0] : todayStr();
+  const commonStore = stores.length === 1 && parsedTxs.length === 1 ? stores[0] : "";
+
+  const items = parsedTxs.map((t) => {
+    let name = t.item || t.store || "지출";
+    if (stores.length > 1 && t.store && !name.includes(t.store)) {
+      name = t.store + " " + name;
+    }
+    if (dates.length > 1 && t.date !== commonDate) {
+      name += ` (${t.date.slice(5).replace("-", "/")})`;
+    }
+    name = name.trim().slice(0, 28);
+    return { name, amount: t.amount, category: guessCategory((t.store || "") + " " + (t.item || "")) };
+  });
+
+  return { date: commonDate, store: commonStore, items };
+}
+
+function handlePasteTextParse() {
+  const raw = document.getElementById("pasteTextInput").value;
+  if (!raw || !raw.trim()) {
+    showToast("붙여넣은 텍스트가 없어요.");
+    return;
+  }
+  const parsed = parseMessageText(raw);
+  if (!parsed || !parsed.items.length) {
+    showToast("금액을 찾지 못했어요. 직접 입력해 주세요.");
+    openQuickAdd();
+    return;
+  }
+  openReviewCard(parsed);
+  document.getElementById("pasteTextInput").value = "";
+}
+
 // ------------------- OCR 실행 -------------------
 
 async function runOcr(file) {
@@ -709,6 +890,7 @@ function init() {
 
   document.getElementById("cameraInput").addEventListener("change", (e) => handleReceiptFile(e.target.files[0]));
   document.getElementById("galleryInput").addEventListener("change", (e) => handleReceiptFile(e.target.files[0]));
+  document.getElementById("pasteTextBtn").addEventListener("click", handlePasteTextParse);
   document.getElementById("addRowBtn").addEventListener("click", () => addReviewRow({ name: "", amount: "", category: "기타" }));
   document.getElementById("cancelReviewBtn").addEventListener("click", closeReviewCard);
   document.getElementById("registerBtn").addEventListener("click", registerReview);
