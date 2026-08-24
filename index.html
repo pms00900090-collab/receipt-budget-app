@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>영수증 가계부</title>
+<meta name="theme-color" content="#2f6f4f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <h1>📒 영수증 가계부</h1>
+    <button id="driveBtn" class="drive-btn" title="Google 드라이브 연결">
+      <span id="driveStatusDot" class="dot dot-off"></span>
+      <span id="driveStatusText">드라이브 연결</span>
+    </button>
+  </div>
+  <div id="syncMsg" class="sync-msg"></div>
+</header>
+
+<main>
+
+  <!-- 요약 -->
+  <section class="card" id="summaryCard">
+    <div class="summary-top">
+      <div>
+        <div class="summary-label" id="summaryMonthLabel">이번 달 지출</div>
+        <div class="summary-amount" id="summaryTotal">0원</div>
+      </div>
+      <button id="quickAddBtn" class="secondary-btn">＋ 직접 입력</button>
+    </div>
+    <div id="categoryBars" class="category-bars"></div>
+  </section>
+
+  <!-- 영수증 촬영/업로드 -->
+  <section class="card">
+    <h2>영수증으로 입력</h2>
+    <div class="capture-row">
+      <label class="capture-btn">
+        📷 영수증 촬영
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="capture-btn secondary">
+        🖼 갤러리에서 선택
+        <input type="file" id="galleryInput" accept="image/*" hidden>
+      </label>
+    </div>
+    <div id="ocrProgressWrap" class="ocr-progress-wrap hidden">
+      <div class="ocr-progress-bar"><div id="ocrProgressFill" class="ocr-progress-fill"></div></div>
+      <div id="ocrProgressText" class="ocr-progress-text">인식 준비 중...</div>
+    </div>
+    <img id="receiptPreview" class="receipt-preview hidden" alt="영수증 미리보기">
+  </section>
+
+  <!-- 인식 결과 편집 -->
+  <section class="card hidden" id="reviewCard">
+    <h2>인식 결과 확인 · 수정</h2>
+    <div class="review-meta">
+      <label>날짜 <input type="date" id="reviewDate"></label>
+      <label>매장/상호 <input type="text" id="reviewStore" placeholder="예: OO마트"></label>
+    </div>
+    <div id="reviewRows" class="review-rows"></div>
+    <button id="addRowBtn" class="secondary-btn small">＋ 항목 추가</button>
+    <div class="review-actions">
+      <button id="cancelReviewBtn" class="text-btn">취소</button>
+      <button id="registerBtn" class="primary-btn">등록하기</button>
+    </div>
+  </section>
+
+  <!-- 직접 입력 폼 -->
+  <section class="card hidden" id="quickAddCard">
+    <h2>직접 입력</h2>
+    <div class="quick-form">
+      <label>날짜 <input type="date" id="qaDate"></label>
+      <label>매장/메모 <input type="text" id="qaStore" placeholder="예: OO식당"></label>
+      <label>품목 <input type="text" id="qaItem" placeholder="예: 점심"></label>
+      <label>금액 <input type="number" id="qaAmount" placeholder="0" inputmode="numeric"></label>
+      <label>카테고리
+        <select id="qaCategory"></select>
+      </label>
+    </div>
+    <div class="review-actions">
+      <button id="qaCancelBtn" class="text-btn">취소</button>
+      <button id="qaSaveBtn" class="primary-btn">저장</button>
+    </div>
+  </section>
+
+  <!-- 내역 리스트 -->
+  <section class="card">
+    <h2>지출 내역</h2>
+    <div id="txList" class="tx-list"></div>
+    <div id="emptyState" class="empty-state hidden">아직 등록된 지출이 없어요. 영수증을 찍거나 직접 입력해 보세요.</div>
+  </section>
+
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- 항목 편집용 카드 템플릿 -->
+<template id="reviewRowTpl">
+  <div class="review-row">
+    <input type="text" class="rr-name" placeholder="품목명">
+    <input type="number" class="rr-amount" placeholder="금액" inputmode="numeric">
+    <select class="rr-category"></select>
+    <button type="button" class="rr-delete" title="삭제">✕</button>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js"></script>
+<script src="categories.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
