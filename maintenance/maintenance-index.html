@@ -737,11 +737,21 @@
     const itemKeywords=/오일|타이어|점검|교체|교환|수리|검사|배터리|필터|브레이크|세차|정비\s/;
     // 표 제목/서식 번호(대괄호로 감싼 줄)나 "점검/정비의뢰일자" 같은 항목 이름줄은 실제 정비 내용이 아니므로 제외
     const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업내용|비\s*고|의뢰일자|완료일|^\[.*\]$/;
-    const itemLine=lines.find(l=>l!==res.shop&&itemKeywords.test(l)&&!totalLabel.test(l)&&!vatLabel.test(l)&&!headerNoise.test(l));
-    if(itemLine){
-      // 표 형식 명세서면 항목명 뒤에 구분/수량/단가 등 숫자열이 붙어 나오기도 함 — 그 앞까지만 항목명으로 씀
-      const cut=itemLine.search(/\s(?:[A-Z]\s|\d)/);
-      res.title=(cut>0?itemLine.slice(0,cut):itemLine).trim();
+    // 품목이 여러 줄이면(부품 여러 개 교환 등) 전부 모아서 나열함 — 금액을 품목별로 쪼개 배정하진 않음(표 순서가 OCR로
+    // 뒤섞이는 경우가 많아 잘못 배정할 위험이 큼). 합계는 위에서 구한 정확한 전체 합계 하나를 그대로 씀.
+    const itemLines=lines
+      .filter(l=>l!==res.shop&&itemKeywords.test(l)&&!totalLabel.test(l)&&!vatLabel.test(l)&&!headerNoise.test(l))
+      .map(l=>{
+        // 표 형식 명세서면 항목명 뒤에 구분/수량/단가 등 숫자열이 붙어 나오기도 함 — 그 앞까지만 항목명으로 씀
+        const cut=l.search(/\s(?:[A-Z]\s|\d)/);
+        return (cut>0?l.slice(0,cut):l).trim();
+      })
+      .filter((l,i,arr)=>l&&arr.indexOf(l)===i); // 중복 제거
+    if(itemLines.length){
+      const MAXSHOW=3;
+      res.title=itemLines.length<=MAXSHOW
+        ? itemLines.join(', ')
+        : itemLines.slice(0,MAXSHOW).join(', ')+' 외 '+(itemLines.length-MAXSHOW)+'건';
     }
 
     if(/타이어/.test(text))res.type='타이어';
