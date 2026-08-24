@@ -678,7 +678,8 @@
     const res={date:'',type:'',title:'',shop:'',cost:'',memo:''};
     const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
     // 한 줄에 금액이 여러 개(표 형식 명세서 등) 있을 수 있어 전부 뽑아서 최댓값을 씀
-    const numsFrom=s=>[...s.matchAll(/(\d{1,3}(?:,\d{3})+|\d{4,})/g)].map(mm=>Number(mm[1].replace(/,/g,'')));
+    // 쉼표(,) 대신 마침표(.)를 천단위 구분자로 잘못 읽는 OCR 오탈자도 같이 받아줌(예: "8.000"→8000)
+    const numsFrom=s=>[...s.matchAll(/(\d{1,3}(?:[,.]\d{3})+|\d{4,})/g)].map(mm=>Number(mm[1].replace(/[,.]/g,'')));
 
     const dm=text.match(/(\d{4})\s*[.\-\/년]\s*(\d{1,2})\s*[.\-\/월]\s*(\d{1,2})\s*일?/);
     if(dm)res.date=dm[1]+'-'+pad(+dm[2])+'-'+pad(+dm[3]);
@@ -687,12 +688,35 @@
     const totalLabel=/합\s*계|결제\s*금액|총\s*액|총\s*금액|받을\s*금액|승인\s*금액|공급가액/;
     const vatLabel=/부가\s*가?\s*치?\s*세|VAT/i;
     let total=null, vat=null;
-    lines.forEach(line=>{
-      if(totalLabel.test(line)){ const ns=numsFrom(line); if(ns.length){ const mx=Math.max(...ns); total=total?Math.max(total,mx):mx; } }
-      if(vatLabel.test(line)&&!totalLabel.test(line)){ const ns=numsFrom(line); if(ns.length){ const mx=Math.max(...ns); vat=vat?Math.max(vat,mx):mx; } }
-    });
+
+    // 방법 1: 부가세는 공급가액의 정확히 10%라는 규칙을 이용해 "공급가액/부가세/합계" 세 숫자를 통째로 찾음.
+    // OCR이 라벨과 숫자를 다른 줄로 떼어놔도(표 형식 명세서에서 자주 그럼) 이 방법은 흔들리지 않음.
+    // 후보가 여러 개면(부품비 합계, 공임 합계, 전체 합계 등) 가장 큰 합계를 최종 합계로 봄.
+    if(totalLabel.test(text)||vatLabel.test(text)){
+      const nums=[...new Set(numsFrom(text).filter(n=>n>=100))];
+      let best=null;
+      nums.forEach(a=>{
+        nums.forEach(b=>{
+          if(a<=b)return;
+          if(Math.abs(b-Math.round(a/10))>Math.max(2,Math.round(a*0.003)))return;
+          const c=a+b;
+          if(nums.some(n=>Math.abs(n-c)<=1)){
+            if(!best||c>best.total)best={supply:a,vat:b,total:c};
+          }
+        });
+      });
+      if(best){ total=best.total; vat=best.vat; }
+    }
+    // 방법 2: 라벨과 숫자가 같은 줄에 있는 경우(간단한 영수증 등)
     if(!total){
-      const all=[...text.matchAll(/(\d{1,3}(?:,\d{3})+|\d{4,})\s*원/g)].map(mm=>Number(mm[1].replace(/,/g,'')));
+      lines.forEach(line=>{
+        if(totalLabel.test(line)){ const ns=numsFrom(line); if(ns.length){ const mx=Math.max(...ns); total=total?Math.max(total,mx):mx; } }
+        if(vatLabel.test(line)&&!totalLabel.test(line)){ const ns=numsFrom(line); if(ns.length){ const mx=Math.max(...ns); vat=vat?Math.max(vat,mx):mx; } }
+      });
+    }
+    // 방법 3: "숫자원" 형태 중 최댓값
+    if(!total){
+      const all=[...text.matchAll(/(\d{1,3}(?:[,.]\d{3})+|\d{4,})\s*원/g)].map(mm=>Number(mm[1].replace(/[,.]/g,'')));
       if(all.length)total=Math.max(...all);
     }
     if(total)res.cost=String(total);
@@ -711,10 +735,11 @@
       }
     }
     const itemKeywords=/오일|타이어|점검|교체|교환|수리|검사|배터리|필터|브레이크|세차|정비\s/;
-    const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업내용|비\s*고|의뢰일자/; // 표 제목/열이름 줄 제외
+    // 표 제목/서식 번호(대괄호로 감싼 줄)나 "점검/정비의뢰일자" 같은 항목 이름줄은 실제 정비 내용이 아니므로 제외
+    const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업내용|비\s*고|의뢰일자|완료일|^\[.*\]$/;
     const itemLine=lines.find(l=>l!==res.shop&&itemKeywords.test(l)&&!totalLabel.test(l)&&!vatLabel.test(l)&&!headerNoise.test(l));
     if(itemLine){
-      // 표 형식 명세서면 항목명 뒤에 구분/수량/단가 등 숫자열이 붙어 나옴 — 그 앞까지만 항목명으로 씀
+      // 표 형식 명세서면 항목명 뒤에 구분/수량/단가 등 숫자열이 붙어 나오기도 함 — 그 앞까지만 항목명으로 씀
       const cut=itemLine.search(/\s(?:[A-Z]\s|\d)/);
       res.title=(cut>0?itemLine.slice(0,cut):itemLine).trim();
     }
