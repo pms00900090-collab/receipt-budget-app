@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>정비 차계부</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#101318; --panel:#181D25; --panel2:#1F2530; --line:#2B3341;
+    --tx:#E7EAEF; --mut:#8A94A3; --amber:#F2A93B; --red:#F2603B;
+    --radius:14px;
+    --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  #app{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;padding-bottom:80px;-webkit-text-size-adjust:100%}
+  #app h1,#app h2,#app h3,#app p{margin:0}
+  #app button{font-family:inherit;cursor:pointer}
+  #app input,#app textarea{font-family:inherit}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 16px 10px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand-mark{font-size:22px;color:var(--amber);line-height:1}
+  .topbar h1{font-size:18px;font-weight:800;letter-spacing:-.02em}
+  .brand-sub{font-size:11px;color:var(--mut);font-family:var(--mono);margin-top:2px}
+  .tools{display:flex;gap:6px}
+  .icon-btn{background:var(--panel2);border:1px solid var(--line);color:var(--mut);width:34px;height:34px;border-radius:10px;font-size:15px}
+  .icon-btn:active{background:var(--line)}
+  .icon-btn.sync.spin{color:var(--amber);animation:spin .8s linear infinite}
+  .icon-btn.on{background:rgba(79,191,139,.15);border-color:rgba(79,191,139,.5);color:#4FBF8B}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .searchwrap{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 16px 12px;display:flex;align-items:center;gap:8px}
+  .search-ic{position:absolute;left:28px;color:var(--mut);font-size:16px;pointer-events:none}
+  #search{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 12px 11px 34px;color:var(--tx);font-size:14px;outline:none;width:100%}
+  #search:focus{border-color:var(--amber)}
+  .clear-btn{position:absolute;right:24px;background:none;border:0;color:var(--mut);font-size:13px}
+
+  .topbar,.searchwrap,main{max-width:880px;margin-left:auto;margin-right:auto}
+  main{padding:0 16px}
+  @media (min-width:760px){
+    .banners{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .banners .banner{margin-bottom:0}
+  }
+
+  /* ── 차량 배너 ── */
+  .banner{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--vc);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+  .banner-body{display:block;width:100%;text-align:left;background:none;border:0;color:var(--tx);padding:14px}
+  .banner-body:active{background:var(--panel2)}
+  .banner-top{display:flex;align-items:center;gap:10px}
+  .addtag{margin-left:auto;font-size:11px;font-weight:700;color:var(--vc);border:1px solid var(--vc);border-radius:20px;padding:5px 10px;white-space:nowrap;opacity:.9}
+  .banner-foot{padding:0 14px 12px}
+  .listbtn{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:10px;font-size:12px}
+  .listbtn:active{background:var(--line);color:var(--tx)}
+  .banner-ic{font-size:24px;line-height:1}
+  .banner-name{font-size:16px;font-weight:800;letter-spacing:-.02em}
+  .banner-sub{font-size:11px;color:var(--mut);margin-top:1px}
+  .banner-stats{display:flex;gap:14px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+  .st{flex:1}
+  .st-k{font-size:10px;color:var(--mut);letter-spacing:.06em}
+  .st-v{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+  .due{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-size:11px;font-family:var(--mono);background:rgba(242,96,59,.12);color:#FF8B6B;border:1px solid rgba(242,96,59,.3);padding:4px 8px;border-radius:7px}
+  .due.ok{background:rgba(242,169,59,.1);color:var(--amber);border-color:rgba(242,169,59,.25)}
+
+  .sect-label{font-size:11px;color:var(--mut);letter-spacing:.1em;margin:18px 0 10px;font-family:var(--mono)}
+
+  .warnbar{display:flex;align-items:center;gap:12px;background:rgba(242,169,59,.1);border:1px solid rgba(242,169,59,.35);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px}
+  .warnbar span{flex:1;font-size:12px;line-height:1.5;color:var(--tx)}
+  .warnbar .btn-main{flex:0 0 auto;padding:10px 14px;font-size:13px}
+
+  /* ── 차량 상세 ── */
+  .vhead{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--vc);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+  .backbtn{background:none;border:0;color:var(--mut);font-size:13px;padding:4px 0;margin-bottom:10px}
+  .vhead-name{font-size:19px;font-weight:800;letter-spacing:-.02em}
+  .odo{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:.04em;margin-top:10px;font-variant-numeric:tabular-nums;color:var(--vc)}
+  .odo small{font-size:12px;color:var(--mut);margin-left:4px;letter-spacing:0}
+  .vhead-row{display:flex;gap:14px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+
+  .addbar{display:flex;gap:8px;margin-bottom:16px}
+  .btn-main{flex:1;background:var(--amber);color:#1A1206;border:0;border-radius:12px;padding:13px;font-size:14px;font-weight:800}
+  .btn-main:active{filter:brightness(.9)}
+  .btn-ghost{background:none;border:1px solid var(--line);color:var(--mut);border-radius:12px;padding:13px 16px;font-size:14px}
+
+  /* ── 연도 ── */
+  .year{margin-bottom:10px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
+  .year-head{width:100%;display:flex;align-items:center;gap:10px;background:var(--panel2);border:0;padding:12px 14px;color:var(--tx);text-align:left}
+  .year-n{font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:.02em}
+  .year-meta{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mut);text-align:right}
+  .caret{color:var(--mut);font-size:11px;transition:transform .18s}
+  .year.open .caret{transform:rotate(90deg)}
+  .year-body{display:none;padding:4px 0}
+  .year.open .year-body{display:block}
+
+  .rec{display:flex;gap:12px;padding:12px 14px;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;color:var(--tx)}
+  .rec:active{background:var(--panel2)}
+  .rec-date{font-family:var(--mono);font-size:11px;color:var(--mut);min-width:42px;padding-top:2px;line-height:1.5}
+  .rec-main{flex:1;min-width:0}
+  .rec-title{font-size:14px;font-weight:600;letter-spacing:-.01em;word-break:break-all}
+  .rec-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:5px}
+  .tag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);color:var(--mut)}
+  .tag.v{border-color:var(--vc);color:var(--vc)}
+  .rec-sub{font-size:11px;color:var(--mut);font-family:var(--mono)}
+  .rec-cost{font-family:var(--mono);font-size:13px;font-weight:600;text-align:right;white-space:nowrap;padding-top:1px}
+  .rec-memo{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5;border-left:2px solid var(--line);padding-left:8px}
+
+  .empty{text-align:center;padding:44px 20px;color:var(--mut);font-size:13px;line-height:1.7}
+  .empty b{display:block;color:var(--tx);font-size:14px;margin-bottom:6px}
+
+  /* ── 입력 전체화면 ── */
+  .sheet-bg{display:none}
+  .sheet{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column}
+  .sheet-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .sheet-head #sheetClose{flex:0 0 auto}
+  .sheet-head strong{font-size:16px;flex:1;letter-spacing:-.01em}
+  .sheet-body{flex:1;overflow-y:auto;padding:18px 16px;display:flex;flex-direction:column;gap:16px;max-width:640px;margin:0 auto;width:100%}
+  .fld{display:block}
+  .fld>span{display:block;font-size:11px;color:var(--mut);margin-bottom:6px;letter-spacing:.02em}
+  .fld>span em{font-style:normal;opacity:.7}
+  .fld input,.fld textarea{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--tx);font-size:15px;outline:none}
+  .fld input:focus,.fld textarea:focus{border-color:var(--amber)}
+  .row2{display:flex;gap:10px}
+  .row2 .fld{flex:1}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:var(--panel);border:1px solid var(--line);color:var(--mut);border-radius:20px;padding:8px 13px;font-size:13px}
+  .chip.on{background:var(--amber);border-color:var(--amber);color:#1A1206;font-weight:700}
+
+  .pastebox{background:rgba(242,169,59,.08);border:1px dashed rgba(242,169,59,.45);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .pastebox-label{font-size:13px;font-weight:700;color:var(--amber);display:flex;flex-direction:column;gap:3px}
+  .pastebox-label em{font-style:normal;font-weight:400;font-size:12px;color:var(--mut)}
+  .pastebox textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px;color:var(--tx);font-size:13px;line-height:1.5;outline:none;resize:vertical}
+  .pastebox textarea:focus{border-color:var(--amber)}
+  .pastebox-actions{display:flex;gap:8px}
+  .pastebox-actions .btn-ghost{flex:0 0 auto;padding:10px 14px;font-size:13px}
+  .pastebox-actions .btn-main{flex:1;padding:10px;font-size:13px}
+
+  .photobox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+  .photobtn{width:100%;font-size:13px;padding:11px}
+  .photobox-hint{font-size:12px;color:var(--mut)}
+  .photo-preview{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .photo-preview img{display:block;width:100%;max-height:220px;object-fit:contain;background:var(--bg)}
+  .photo-remove{position:absolute;top:8px;right:8px;background:rgba(20,22,26,.75);color:#fff;border:none;border-radius:8px;padding:7px 11px;font-size:12px}
+  .sheet-foot{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--line);padding-bottom:calc(14px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;width:100%;box-sizing:border-box}
+
+  /* ── 달력 ── */
+  .datebtn{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--tx);font-size:14px;text-align:left;font-family:var(--mono);letter-spacing:-.01em}
+  .datebtn::before{content:"📅 ";font-family:var(--sans)}
+  .datebtn.empty{color:var(--mut)}
+  .datebtn:active{border-color:var(--amber)}
+  .cal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:70}
+  .cal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:80;width:min(92vw,360px);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+  .cal-head{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+  .cal-nav{flex:0 0 38px;height:38px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--tx);font-size:18px;line-height:1}
+  .cal-title{flex:1;background:none;border:0;color:var(--tx);font-size:16px;font-weight:800;font-family:var(--mono);letter-spacing:.02em;padding:8px}
+  .cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+  .cal-week span{text-align:center;font-size:10px;color:var(--mut);padding:4px 0}
+  .cal-week .sun{color:#F2603B}
+  .cal-week .sat{color:#5AA9E6}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .cal-grid.months{grid-template-columns:repeat(3,1fr);gap:6px}
+  .cal-cell{aspect-ratio:1;background:none;border:1px solid transparent;border-radius:10px;color:var(--tx);font-family:var(--mono);font-size:13px;display:flex;align-items:center;justify-content:center}
+  .cal-grid.months .cal-cell{aspect-ratio:2/1;background:var(--bg);border-color:var(--line);font-size:14px}
+  .cal-cell.blank{visibility:hidden}
+  .cal-cell.sun{color:#F2603B}
+  .cal-cell.sat{color:#5AA9E6}
+  .cal-cell.today{border-color:var(--line);font-weight:700}
+  .cal-cell.sel{background:var(--amber);color:#1A1206;font-weight:800;border-color:var(--amber)}
+  .cal-cell:active{background:var(--panel2)}
+  .cal-cell.sel:active{background:var(--amber)}
+  .cal-foot{display:flex;gap:6px;margin-top:12px}
+  .cal-foot .btn-ghost{padding:11px 12px;font-size:13px}
+  .cal-foot .btn-main{padding:11px}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);color:var(--tx);padding:10px 16px;border-radius:20px;font-size:13px;z-index:60}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◧</span>
+      <div>
+        <h1>정비 차계부</h1>
+        <p class="brand-sub" id="brandSub">보유 차량 4대</p>
+      </div>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="btnDriveAuth" title="구글 드라이브 연결">🔐</button>
+      <button class="icon-btn sync" id="btnSync" title="드라이브에서 새로고침">⟳</button>
+      <button class="icon-btn" id="btnBackup" title="구글 드라이브 백업">⤓</button>
+      <button class="icon-btn" id="btnRestore" title="복원">⤒</button>
+      <input type="file" id="fileInput" accept=".json" hidden>
+    </div>
+  </header>
+
+  <div class="searchwrap">
+    <span class="search-ic">⌕</span>
+    <input id="search" type="search" placeholder="정비내역·검사·정비소·연도 검색 (예: 검사, 브레이크, 2024)" autocomplete="off">
+    <button class="clear-btn" id="clearSearch" hidden>✕</button>
+  </div>
+
+  <main id="view"></main>
+
+  <div class="sheet-bg" id="sheetBg" hidden></div>
+  <section class="sheet" id="sheet" hidden>
+    <div class="sheet-head">
+      <button class="icon-btn" id="sheetClose">‹</button>
+      <strong id="sheetTitle">정비 기록 추가</strong>
+    </div>
+    <div class="sheet-body">
+      <div class="pastebox">
+        <div class="pastebox-label">🧾 영수증 텍스트로 자동 채우기<em>구글 렌즈 등으로 사진 속 글자를 복사해서 여기 붙여넣으면 바로 분석해서 채워요</em></div>
+        <textarea id="pasteText" rows="3" placeholder="여기에 붙여넣으세요"></textarea>
+        <div class="pastebox-actions">
+          <button type="button" class="btn-ghost" id="pasteClear">지우기</button>
+          <button type="button" class="btn-main" id="pasteApply">분석해서 채우기</button>
+        </div>
+      </div>
+      <div class="photobox">
+        <button type="button" class="btn-ghost photobtn" id="btnPhoto">📷 영수증 사진으로 자동 인식</button>
+        <div class="photobox-hint" id="photoHint">촬영하거나 갤러리에서 고르면 사진 속 글자를 자동으로 읽어서 채워요 · 사진도 기록에 같이 보관돼요</div>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+        <div class="photo-preview" id="photoPreview" hidden>
+          <img id="photoImg" alt="영수증 사진">
+          <button type="button" class="photo-remove" id="photoRemove">✕ 사진 삭제</button>
+        </div>
+      </div>
+      <div class="fld"><span>날짜</span><button type="button" class="datebtn" id="f_date">날짜 선택</button></div>
+      <div class="fld">
+        <span>구분</span>
+        <div class="chips" id="typeChips"></div>
+      </div>
+      <label class="fld"><span>정비/검사 내용</span><input type="text" id="f_title" placeholder="예: 엔진오일 + 오일필터 교환"></label>
+      <label class="fld"><span>정비소 / 장소</span><input type="text" id="f_shop" placeholder="예: 대성정비 / 교통안전공단 검사소"></label>
+      <div class="row2">
+        <label class="fld"><span>주행거리 (km)</span><input type="number" id="f_km" inputmode="numeric" placeholder="0"></label>
+        <label class="fld"><span>비용 (원)</span><input type="number" id="f_cost" inputmode="numeric" placeholder="0"></label>
+      </div>
+      <div class="fld"><span>다음 예정일 <em>(선택 · 검사/교체 주기)</em></span><button type="button" class="datebtn empty" id="f_next">예정일 없음</button></div>
+      <label class="fld"><span>메모</span><textarea id="f_memo" rows="2" placeholder="교체 부품, 특이사항 등"></textarea></label>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn-ghost" id="btnDelete" hidden>삭제</button>
+      <button class="btn-main" id="btnSave">저장</button>
+    </div>
+  </section>
+
+  <div class="cal-bg" id="calBg" hidden></div>
+  <section class="cal" id="cal" hidden>
+    <div class="cal-head">
+      <button class="cal-nav" id="calPrev">‹</button>
+      <button class="cal-title" id="calTitle"></button>
+      <button class="cal-nav" id="calNext">›</button>
+    </div>
+    <div class="cal-week" id="calWeek"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-foot">
+      <button class="btn-ghost" id="calClear">비우기</button>
+      <button class="btn-ghost" id="calToday">오늘</button>
+      <button class="btn-main" id="calDone">확인</button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast" hidden></div>
+</div>
+
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+(function(){
+  const KEY='maintlog:v1';
+
+  /* 저장소: 클로드 앱에서 열면 계정 저장소(기기 공유), 파일로 열면 그 브라우저에 저장 */
+  const store=(function(){
+    if(typeof window!=='undefined'&&window.storage&&window.storage.get){
+      return{mode:'account',
+        get:async k=>{try{const r=await window.storage.get(k);return r?r.value:null;}catch(e){return null;}},
+        set:async(k,v)=>{await window.storage.set(k,v);}};
+    }
+    let ls=null;
+    try{localStorage.setItem('__t','1');localStorage.removeItem('__t');ls=localStorage;}catch(e){}
+    const mem={};
+    return{mode:ls?'local':'temp',
+      get:async k=>ls?ls.getItem(k):(mem[k]||null),
+      set:async(k,v)=>{if(ls)ls.setItem(k,v);else mem[k]=v;}};
+  })();
+  const VEHICLES=[
+    {id:'trailer', name:'25톤 츄레라', sub:'대형 화물 트레일러', color:'#F2A93B', icon:'🚛'},
+    {id:'avante',  name:'아반테',       sub:'승용',              color:'#5AA9E6', icon:'🚗'},
+    {id:'carnival',name:'카니발 하이리무진', sub:'승합',          color:'#B79BF5', icon:'🚐'},
+    {id:'county',  name:'카운티 캠핑카', sub:'특수 · 캠핑카',      color:'#4FBF8B', icon:'🚌'}
+  ];
+  const TYPES=['정기점검','소모품','엔진오일','타이어','부품교체','검사','사고/수리','보험/세금','기타'];
+  const V=id=>VEHICLES.find(v=>v.id===id)||VEHICLES[0];
+
+  let recs=[], route={name:'home',v:null}, edit=null, openYears={}, formType='정기점검';
+  let lastSync='', lastBackupDate='', lastBackupTarget='', lastBackedUpUp='', sheetV='trailer', formDate='', formNext='', formPhoto=null, calTarget='date', calY=2026, calM=1, calMode='day';
+  const WD=['일','월','화','수','목','금','토'];
+
+  const $=s=>document.querySelector(s);
+  const view=$('#view'), search=$('#search');
+  const won=n=>n?Number(n).toLocaleString('ko-KR')+'원':'—';
+  const km=n=>n?Number(n).toLocaleString('ko-KR'):'—';
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const today=()=>new Date().toISOString().slice(0,10);
+  const dday=d=>Math.ceil((new Date(d+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5);
+
+  function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,1900);}
+
+  const stamp=()=>new Date().toISOString();
+  const live=()=>recs.filter(r=>!r.del);
+
+  /* 기기 간 병합: 같은 id면 마지막 수정본이 이김, 삭제는 묘비로 전파 */
+  function merge(a,b){
+    const m={};
+    a.concat(b).forEach(r=>{
+      if(!r||!r.id)return;
+      const p=m[r.id];
+      if(!p||String(r.up||'')>=String(p.up||''))m[r.id]=r;
+    });
+    return Object.values(m);
+  }
+
+  async function pull(){
+    const v=await store.get(KEY);
+    return v?JSON.parse(v):[];
+  }
+  const kdate=d=>d?(+d.slice(5,7))+'/'+(+d.slice(8,10)):'';
+  const tail=()=>(store.mode==='account'
+    ?(lastSync?' · 동기화 '+lastSync:'')
+    :(store.mode==='local'?' · 이 브라우저에 저장':' · 임시 저장'))
+    +(lastBackupDate?' · '+(lastBackupTarget==='drive'?'드라이브 백업 ':'백업 ')+kdate(lastBackupDate):'');
+
+  async function load(){
+    try{recs=await pull();}
+    catch(e){recs=[];}
+    try{
+      const driveRecs=await pullDriveBackup();
+      if(driveRecs&&driveRecs.length){
+        const before=JSON.stringify(recs);
+        recs=merge(recs,driveRecs);
+        if(JSON.stringify(recs)!==before)await store.set(KEY,JSON.stringify(recs));
+      }
+    }catch(e){}
+    try{lastBackupDate=await store.get('maintlog:lastbackup')||'';}catch(e){}
+    try{lastBackupTarget=await store.get('maintlog:lastbackuptarget')||'';}catch(e){}
+    try{lastBackedUpUp=await store.get('maintlog:lastbackedupup')||'';}catch(e){}
+    markSync();render();
+    setTimeout(maybeAutoBackup,1200);
+  }
+
+  async function save(){
+    try{
+      let remote=[];
+      try{remote=await pull();}catch(e){}
+      recs=merge(remote,recs);
+      await store.set(KEY,JSON.stringify(recs));
+      markSync();
+    }
+    catch(e){toast('저장에 실패했습니다. 다시 시도해 주세요');}
+  }
+
+  function markSync(){
+    const t=new Date();
+    lastSync=pad(t.getHours())+':'+pad(t.getMinutes());
+  }
+
+  /* ── 백업 (실제 구글 드라이브 REST API + 구글 로그인) ── */
+  const DRIVE_TITLE='정비차계부_백업.json';
+  const DRIVE_CLIENT_ID='104858973577-7naknkqhdaaav9lghv3m6cfca1s53scr.apps.googleusercontent.com';
+  const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+  let driveTokenClient=null, driveToken=null, driveTokenExp=0, driveResolvers=[], driveFileId=null;
+
+  function initDriveClient(){
+    if(driveTokenClient)return true;
+    if(!(window.google&&google.accounts&&google.accounts.oauth2))return false;
+    driveTokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:DRIVE_CLIENT_ID,
+      scope:DRIVE_SCOPE,
+      callback:(resp)=>{
+        driveToken=(resp&&resp.access_token)?resp.access_token:null;
+        driveTokenExp=driveToken?Date.now()+(Number(resp.expires_in||3300))*1000:0;
+        updateDriveAuthUI();
+        const rs=driveResolvers;driveResolvers=[];
+        rs.forEach(r=>r(!!driveToken));
+      }
+    });
+    return true;
+  }
+  function requestDriveToken(interactive){
+    return new Promise(resolve=>{
+      if(!initDriveClient()){ toast('구글 로그인 스크립트를 불러오는 중이에요. 잠시 후 다시 눌러주세요'); resolve(false); return; }
+      driveResolvers.push(resolve);
+      try{ driveTokenClient.requestAccessToken({prompt:interactive?'':''}); }
+      catch(e){ driveResolvers.pop(); resolve(false); }
+    });
+  }
+  /* 이미 로그인돼 있으면 그대로 쓰고, 아니면 자동(팝업 없이 조용히)으로는 시도하지 않음 — 사용자가 직접 누른 동작에서만 로그인 팝업을 띄움 */
+  async function ensureDriveToken(interactive){
+    if(driveToken&&Date.now()<driveTokenExp-60000)return true;
+    if(!interactive)return false;
+    return await requestDriveToken(true);
+  }
+  function updateDriveAuthUI(){
+    const b=$('#btnDriveAuth');
+    if(!b)return;
+    b.classList.toggle('on',!!driveToken);
+    b.title=driveToken?'구글 드라이브 연결됨':'구글 드라이브 연결';
+  }
+  async function driveFetch(url,opts){
+    opts=opts||{};
+    const headers=Object.assign({},opts.headers||{},{Authorization:'Bearer '+driveToken});
+    return fetch(url,Object.assign({},opts,{headers}));
+  }
+  async function ensureDriveFileId(){
+    if(driveFileId)return driveFileId;
+    try{ const cached=await store.get('maintlog:drivefileid'); if(cached)driveFileId=cached; }catch(e){}
+    if(driveFileId)return driveFileId;
+    try{
+      const q=encodeURIComponent("name='"+DRIVE_TITLE+"' and trashed=false");
+      const res=await driveFetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,modifiedTime)&orderBy=modifiedTime desc&pageSize=5');
+      if(!res.ok)return null;
+      const j=await res.json();
+      const files=(j&&j.files)||[];
+      if(files.length){
+        driveFileId=files[0].id;
+        store.set('maintlog:drivefileid',driveFileId);
+        files.slice(1).forEach(f=>{ if(f&&f.id)driveFetch('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE'}).catch(()=>{}); });
+      }
+    }catch(e){}
+    return driveFileId;
+  }
+  /* 구글 드라이브의 최신 백업을 읽어와 로컬 기록과 합치기 — 로컬이 지워져도 드라이브에서 복구됨(로그인 돼 있을 때만) */
+  async function pullDriveBackup(){
+    if(!driveToken)return null;
+    try{
+      const fileId=await ensureDriveFileId();
+      if(!fileId)return null;
+      const res=await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media');
+      if(!res.ok)return null;
+      const data=await res.json();
+      return Array.isArray(data)?data:null;
+    }catch(e){ return null; }
+  }
+  const maxUpTime=()=>live().reduce((m,r)=>(r.up&&r.up>m)?r.up:m,'');
+  const isPending=()=>live().length>0 && maxUpTime()!==lastBackedUpUp;
+  function markBackedUp(target){
+    lastBackupDate=today();lastBackupTarget=target;lastBackedUpUp=maxUpTime();
+    store.set('maintlog:lastbackup',lastBackupDate);
+    store.set('maintlog:lastbackuptarget',target);
+    store.set('maintlog:lastbackedupup',lastBackedUpUp);
+    render();
+  }
+  /* 로컬 다운로드(구글 드라이브를 쓸 수 없을 때의 대체 수단) — 일반 브라우저라 <a download>가 그대로 동작함 */
+  async function localBackup(auto){
+    try{
+      const filename='정비차계부_'+today()+'.json';
+      const data=JSON.stringify(recs,null,2);
+      const b=new Blob([data],{type:'application/json'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(b);a.download=filename;a.click();
+      markBackedUp('local');
+      if(!auto)toast('백업 파일을 내려받았습니다');
+    }catch(e){ if(!auto)toast('백업에 실패했습니다'); }
+  }
+  /* 파일 하나에 덮어쓰기(PATCH) — 없으면 새로 만듦. 캐시해둔 파일ID가 지워졌으면(404) 다시 찾아서 새로 만듦 */
+  async function driveWriteBackup(body){
+    let fileId=await ensureDriveFileId();
+    if(fileId){
+      const res=await driveFetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',
+        {method:'PATCH',headers:{'Content-Type':'application/json'},body});
+      if(res.ok)return;
+      if(res.status===404){ driveFileId=null; } else { throw new Error('drive_write_failed'); }
+    }
+    const meta={name:DRIVE_TITLE,mimeType:'application/json'};
+    const boundary='maintlogbdry'+stamp().replace(/\D/g,'');
+    const multi='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
+      '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+body+'\r\n--'+boundary+'--';
+    const res2=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {method:'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body:multi});
+    if(!res2.ok)throw new Error('drive_create_failed');
+    const j=await res2.json();
+    if(j&&j.id){ driveFileId=j.id; store.set('maintlog:drivefileid',driveFileId); }
+  }
+  /* 구글 드라이브 백업 — auto=true(자동 저장 시)는 이미 로그인돼 있을 때만 조용히 시도, 로그인 안 돼 있으면 배너로 안내만 함 */
+  async function doBackup(auto){
+    if(!live().length){ if(!auto)toast('백업할 기록이 없습니다'); return; }
+    const ok=await ensureDriveToken(!auto);
+    if(!ok){ if(!auto)toast('구글 드라이브 인증에 실패했습니다. 다시 시도해 주세요'); return; }
+    try{
+      await driveWriteBackup(JSON.stringify(recs,null,2));
+      markBackedUp('drive');
+      if(!auto)toast('구글 드라이브에 백업했습니다');
+    }catch(err){
+      if(!auto){ toast('구글 드라이브 백업에 실패했습니다. 기기에 대신 저장할게요'); await localBackup(auto); }
+    }
+  }
+  async function maybeAutoBackup(){
+    if(!live().length)return;
+    if(driveToken&&isPending())doBackup(true);
+  }
+  /* 앱을 닫거나 화면을 벗어날 때 마지막으로 한 번 더 백업 시도(베스트 에포트 — 브라우저가 곧바로 종료하면 못 갈 수도 있음) */
+  function flushBackupOnHide(){ if(driveToken&&isPending())doBackup(true); }
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden')flushBackupOnHide(); });
+  window.addEventListener('pagehide',flushBackupOnHide);
+
+  async function driveResync(){
+    const b=$('#btnSync');b.classList.add('spin');
+    try{
+      const ok=await ensureDriveToken(true);
+      if(!ok){ toast('구글 드라이브 인증에 실패했습니다'); b.classList.remove('spin'); return; }
+      const driveRecs=await pullDriveBackup();
+      if(driveRecs&&driveRecs.length){
+        const before=JSON.stringify(recs);
+        recs=merge(recs,driveRecs);
+        if(JSON.stringify(recs)!==before){ await store.set(KEY,JSON.stringify(recs)); render(); }
+        toast('드라이브에서 불러왔습니다 · 총 '+live().length+'건');
+      }else{
+        toast('드라이브에 백업 파일이 없습니다');
+      }
+    }catch(e){ toast('드라이브에서 불러오지 못했습니다'); }
+    b.classList.remove('spin');
+  }
+
+  const byV=id=>recs.filter(r=>r.v===id&&!r.del).sort((a,b)=>b.date.localeCompare(a.date));
+  function nextDue(id){
+    const l=recs.filter(r=>r.v===id&&r.next&&!r.del).sort((a,b)=>a.next.localeCompare(b.next));
+    return l.length?l[0]:null;
+  }
+
+  /* ── 홈: 차량 배너 ── */
+  function home(){
+    $('#brandSub').textContent='보유 차량 '+VEHICLES.length+'대 · 기록 '+live().length+'건'+tail();
+    let h='';
+    if(isPending()){
+      h+='<div class="warnbar"><span>'+(lastBackupDate?'백업 안 된 변경사항이 있어요 · 마지막 백업 '+kdate(lastBackupDate):'백업 기록이 없어요')+
+        ' — 눌러서 지금 백업해 주세요</span><button class="btn-main" id="quickBackup">지금 백업</button></div>';
+    }
+    h+='<p class="sect-label">차량 선택 · 카드를 누르면 기록 추가</p><div class="banners">';
+    VEHICLES.forEach(v=>{
+      const list=byV(v.id), last=list[0], due=nextDue(v.id);
+      const cost=list.reduce((s,r)=>s+(Number(r.cost)||0),0);
+      let dueHtml='';
+      if(due){const d=dday(due.next);
+        dueHtml='<div class="due '+(d>30?'ok':'')+'">⏱ '+esc(due.title||due.type)+' · '+
+          (d<0?Math.abs(d)+'일 지남':d===0?'오늘':'D-'+d)+' ('+due.next+')</div>';}
+      h+='<div class="banner" style="--vc:'+v.color+'">'+
+        '<button class="banner-body" data-add="'+v.id+'">'+
+        '<div class="banner-top"><span class="banner-ic">'+v.icon+'</span><div>'+
+        '<div class="banner-name">'+v.name+'</div><div class="banner-sub">'+v.sub+'</div></div>'+
+        '<span class="addtag">＋ 기록 추가</span></div>'+
+        '<div class="banner-stats">'+
+        '<div class="st"><div class="st-k">최근 정비</div><div class="st-v">'+(last?last.date:'—')+'</div></div>'+
+        '<div class="st"><div class="st-k">기록</div><div class="st-v">'+list.length+'건</div></div>'+
+        '<div class="st"><div class="st-k">누적 비용</div><div class="st-v">'+(cost?won(cost):'—')+'</div></div>'+
+        '</div>'+dueHtml+'</button>'+
+        '<div class="banner-foot"><button class="listbtn" data-list="'+v.id+'">정비내역 '+list.length+'건 보기 ›</button></div>'+
+        '</div>';
+    });
+    view.innerHTML=h+'</div>';
+    view.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openSheet(null,b.dataset.add));
+    view.querySelectorAll('[data-list]').forEach(b=>b.onclick=()=>{route={name:'v',v:b.dataset.list};openYears={};render();});
+    const qb=$('#quickBackup'); if(qb)qb.onclick=()=>doBackup(false);
+  }
+
+  /* ── 연도별 목록 ── */
+  function yearsHtml(list,showV){
+    if(!list.length)return '<div class="empty"><b>기록이 없습니다</b>아래 기록 추가 버튼으로<br>정비·검사 내역을 남겨보세요</div>';
+    const g={};
+    list.forEach(r=>{(g[r.date.slice(0,4)]=g[r.date.slice(0,4)]||[]).push(r);});
+    const years=Object.keys(g).sort((a,b)=>b.localeCompare(a));
+    return years.map((y,i)=>{
+      const rs=g[y], cost=rs.reduce((s,r)=>s+(Number(r.cost)||0),0);
+      const open=openYears[y]!==undefined?openYears[y]:i===0;
+      return '<div class="year'+(open?' open':'')+'" data-y="'+y+'">'+
+        '<button class="year-head"><span class="caret">▶</span><span class="year-n">'+y+'</span>'+
+        '<span class="year-meta">'+rs.length+'건 · '+won(cost)+'</span></button>'+
+        '<div class="year-body">'+rs.map(r=>{
+          const v=V(r.v);
+          return '<button class="rec" style="--vc:'+v.color+'" data-id="'+r.id+'">'+
+            '<div class="rec-date">'+r.date.slice(5).replace('-','/')+'</div>'+
+            '<div class="rec-main"><div class="rec-title">'+esc(r.title||r.type)+'</div>'+
+            '<div class="rec-line">'+(showV?'<span class="tag v">'+v.name+'</span>':'')+
+            '<span class="tag">'+esc(r.type)+'</span>'+
+            (r.photo?'<span class="tag">📷</span>':'')+
+            (r.shop?'<span class="rec-sub">'+esc(r.shop)+'</span>':'')+
+            (r.km?'<span class="rec-sub">'+km(r.km)+'km</span>':'')+'</div>'+
+            (r.memo?'<div class="rec-memo">'+esc(r.memo)+'</div>':'')+
+            '</div><div class="rec-cost">'+won(r.cost)+'</div></button>';
+        }).join('')+'</div></div>';
+    }).join('');
+  }
+
+  function bindList(){
+    view.querySelectorAll('.year-head').forEach(h=>h.onclick=()=>{
+      const y=h.parentElement.dataset.y;
+      openYears[y]=!h.parentElement.classList.contains('open');
+      h.parentElement.classList.toggle('open');
+    });
+    view.querySelectorAll('.rec').forEach(b=>b.onclick=()=>openSheet(recs.find(r=>r.id===b.dataset.id)));
+  }
+
+  /* ── 차량 상세 ── */
+  function vehicle(){
+    const v=V(route.v), list=byV(v.id), last=list[0];
+    const maxKm=list.reduce((m,r)=>Math.max(m,Number(r.km)||0),0);
+    const cost=list.reduce((s,r)=>s+(Number(r.cost)||0),0);
+    $('#brandSub').textContent=v.name+' · 기록 '+list.length+'건'+tail();
+    view.innerHTML='<button class="backbtn">← 차량 목록</button>'+
+      '<div class="vhead" style="--vc:'+v.color+'">'+
+      '<div class="vhead-name">'+v.icon+' '+v.name+'</div>'+
+      '<div class="odo">'+km(maxKm)+'<small>km 기준</small></div>'+
+      '<div class="vhead-row">'+
+      '<div class="st"><div class="st-k">최근 정비</div><div class="st-v">'+(last?last.date:'—')+'</div></div>'+
+      '<div class="st"><div class="st-k">누적 비용</div><div class="st-v">'+(cost?won(cost):'—')+'</div></div>'+
+      '</div></div>'+
+      '<div class="addbar"><button class="btn-main" id="btnAdd">＋ 정비 기록 추가</button></div>'+
+      yearsHtml(list,false);
+    view.querySelector('.backbtn').onclick=()=>{route={name:'home'};render();};
+    $('#btnAdd').onclick=()=>openSheet(null);
+    bindList();
+  }
+
+  /* ── 검색 ── */
+  function results(q){
+    const t=q.trim().toLowerCase();
+    const hit=live().filter(r=>[r.title,r.shop,r.memo,r.type,r.date,V(r.v).name].join(' ').toLowerCase().includes(t))
+      .sort((a,b)=>b.date.localeCompare(a.date));
+    const cost=hit.reduce((s,r)=>s+(Number(r.cost)||0),0);
+    $('#brandSub').textContent='검색 결과 '+hit.length+'건';
+    view.innerHTML='<p class="sect-label">"'+esc(q)+'" 검색 · '+hit.length+'건 · '+won(cost)+'</p>'+
+      (hit.length?yearsHtml(hit,true):'<div class="empty"><b>검색 결과가 없습니다</b>다른 단어로 찾아보세요<br>(정비 내용 · 정비소 · 구분 · 연도)</div>');
+    bindList();
+  }
+
+  function render(){
+    const q=search.value;
+    $('#clearSearch').hidden=!q;
+    if(q.trim())return results(q);
+    route.name==='v'?vehicle():home();
+  }
+
+  /* ── 입력 시트 ── */
+  function chips(){
+    $('#typeChips').innerHTML=TYPES.map(t=>'<button class="chip'+(t===formType?' on':'')+'" data-t="'+t+'">'+t+'</button>').join('');
+    $('#typeChips').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{formType=c.dataset.t;chips();});
+  }
+  function openSheet(r,vid){
+    edit=r||null;
+    sheetV=r?r.v:(vid||route.v||'trailer');
+    formType=r?r.type:'정기점검';
+    $('#sheetTitle').textContent=V(sheetV).name+(r?' · 기록 수정':' · 기록 추가');
+    formDate=r?r.date:today();
+    formNext=r?(r.next||''):'';
+    paintDateBtns();
+    $('#f_title').value=r?(r.title||''):'';
+    $('#f_shop').value=r?(r.shop||''):'';
+    $('#f_km').value=r?(r.km||''):'';
+    $('#f_cost').value=r?(r.cost||''):'';
+    $('#f_memo').value=r?(r.memo||''):'';
+    $('#btnDelete').hidden=!r;
+    chips();
+    $('#pasteText').value='';
+    formPhoto=r?(r.photo||null):null;
+    showPhotoPreview();
+    $('#sheet').hidden=false;$('#sheetBg').hidden=false;
+  }
+  function closeSheet(){$('#sheet').hidden=true;$('#sheetBg').hidden=true;edit=null;}
+
+  $('#sheetClose').onclick=closeSheet;
+  $('#sheetBg').onclick=closeSheet;
+
+  /* ── 영수증/명세서 텍스트 자동 채우기 ── */
+  function parseReceiptText(text){
+    const res={date:'',type:'',title:'',shop:'',cost:'',memo:''};
+    const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    // 한 줄에 금액이 여러 개(표 형식 명세서 등) 있을 수 있어 전부 뽑아서 최댓값을 씀
+    const numsFrom=s=>[...s.matchAll(/(\d{1,3}(?:,\d{3})+|\d{4,})/g)].map(mm=>Number(mm[1].replace(/,/g,'')));
+
+    const dm=text.match(/(\d{4})\s*[.\-\/년]\s*(\d{1,2})\s*[.\-\/월]\s*(\d{1,2})\s*일?/);
+    if(dm)res.date=dm[1]+'-'+pad(+dm[2])+'-'+pad(+dm[3]);
+
+    // 합계/총액 외에 공급가액(세금계산서·정비명세서류)도 총액 후보로 봄 — 부품비+공임 등 여러 열이 있으면 최댓값이 보통 최종 합계
+    const totalLabel=/합\s*계|결제\s*금액|총\s*액|총\s*금액|받을\s*금액|승인\s*금액|공급가액/;
+    const vatLabel=/부가\s*가?\s*치?\s*세|VAT/i;
+    let total=null, vat=null;
+    lines.forEach(line=>{
+      if(totalLabel.test(line)){ const ns=numsFrom(line); if(ns.length){ const mx=Math.max(...ns); total=total?Math.max(total,mx):mx; } }
+      if(vatLabel.test(line)&&!totalLabel.test(line)){ const ns=numsFrom(line); if(ns.length){ const mx=Math.max(...ns); vat=vat?Math.max(vat,mx):mx; } }
+    });
+    if(!total){
+      const all=[...text.matchAll(/(\d{1,3}(?:,\d{3})+|\d{4,})\s*원/g)].map(mm=>Number(mm[1].replace(/,/g,'')));
+      if(all.length)total=Math.max(...all);
+    }
+    if(total)res.cost=String(total);
+    if(vat)res.memo='부가세 '+won(vat)+' 포함';
+
+    // 상호/업체명: "(주)OOO" / "㈜OOO" 형태가 있으면 그게 가장 확실한 업체명
+    const bizm=text.match(/((?:\(주\)|㈜)[^\s,\n]{1,20})/);
+    if(bizm)res.shop=bizm[1].trim();
+    if(!res.shop){
+      for(const line of lines.slice(0,6)){
+        if(/^[\d.\-\/:\s]+$/.test(line))continue;
+        if(/^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(line))continue;
+        if(totalLabel.test(line)||vatLabel.test(line))continue;
+        if(line.length<2)continue;
+        res.shop=line; break;
+      }
+    }
+    const itemKeywords=/오일|타이어|점검|교체|교환|수리|검사|배터리|필터|브레이크|세차|정비\s/;
+    const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업내용|비\s*고|의뢰일자/; // 표 제목/열이름 줄 제외
+    const itemLine=lines.find(l=>l!==res.shop&&itemKeywords.test(l)&&!totalLabel.test(l)&&!vatLabel.test(l)&&!headerNoise.test(l));
+    if(itemLine){
+      // 표 형식 명세서면 항목명 뒤에 구분/수량/단가 등 숫자열이 붙어 나옴 — 그 앞까지만 항목명으로 씀
+      const cut=itemLine.search(/\s(?:[A-Z]\s|\d)/);
+      res.title=(cut>0?itemLine.slice(0,cut):itemLine).trim();
+    }
+
+    if(/타이어/.test(text))res.type='타이어';
+    else if(/오일/.test(text))res.type='엔진오일';
+    else if(/보험|자동차세|책임보험/.test(text))res.type='보험/세금';
+    else if(/검사/.test(text))res.type='검사';
+    else if(/사고|판금|도장/.test(text))res.type='사고/수리';
+    else if(/부품|교체|교환/.test(text))res.type='부품교체';
+    return res;
+  }
+  function applyPasteText(silent){
+    const t=$('#pasteText').value;
+    if(!t.trim()){ if(!silent)toast('붙여넣은 텍스트가 없어요'); return; }
+    const r=parseReceiptText(t);
+    let hit=0;
+    if(r.date){ formDate=r.date; paintDateBtns(); hit++; }
+    if(r.type){ formType=r.type; chips(); hit++; }
+    if(r.title){ $('#f_title').value=r.title; hit++; }
+    if(r.shop){ $('#f_shop').value=r.shop; hit++; }
+    if(r.cost){ $('#f_cost').value=r.cost; hit++; }
+    if(r.memo){
+      const cur=$('#f_memo').value.trim();
+      $('#f_memo').value=cur?cur+'\n'+r.memo:r.memo;
+    }
+    toast(hit?'텍스트에서 채웠어요 · 확인하고 저장해 주세요':'인식되는 정보를 못 찾았어요 · 직접 입력해 주세요');
+  }
+  $('#pasteText').addEventListener('paste',()=>{ setTimeout(()=>applyPasteText(true),30); });
+  $('#pasteClear').onclick=()=>{ $('#pasteText').value=''; };
+  $('#pasteApply').onclick=()=>applyPasteText(false);
+
+  /* ── 영수증 사진 자동 인식(Tesseract.js OCR) + 원본 보관 ── */
+  function showPhotoPreview(){
+    if(formPhoto){ $('#photoImg').src=formPhoto; $('#photoPreview').hidden=false; }
+    else { $('#photoImg').src=''; $('#photoPreview').hidden=true; }
+  }
+  function compressImage(file){
+    return new Promise((resolve,reject)=>{
+      const url=URL.createObjectURL(file);
+      const img=new Image();
+      img.onload=()=>{
+        const MAX=1100;
+        let w=img.naturalWidth, h=img.naturalHeight;
+        if(w>MAX||h>MAX){ const s=MAX/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg',0.6));
+      };
+      img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+      img.src=url;
+    });
+  }
+  let ocrWorker=null, ocrWorkerPromise=null;
+  function getOcrWorker(){
+    if(ocrWorker)return Promise.resolve(ocrWorker);
+    if(!ocrWorkerPromise){
+      ocrWorkerPromise=Tesseract.createWorker('kor').then(w=>{ocrWorker=w;return w;});
+    }
+    return ocrWorkerPromise;
+  }
+  $('#btnPhoto').onclick=()=>$('#photoInput').click();
+  $('#photoInput').onchange=async(e)=>{
+    const f=e.target.files&&e.target.files[0];
+    e.target.value='';
+    if(!f)return;
+    try{ formPhoto=await compressImage(f); showPhotoPreview(); }
+    catch(err){ toast('사진을 불러오지 못했어요'); }
+    const hint=$('#photoHint');
+    const hintBefore=hint.textContent;
+    hint.textContent='사진에서 글자를 읽는 중이에요… (처음 한 번은 조금 걸려요)';
+    try{
+      const worker=await getOcrWorker();
+      const {data}=await worker.recognize(f);
+      hint.textContent=hintBefore;
+      const text=(data&&data.text)||'';
+      if(text.trim()){
+        $('#pasteText').value=text;
+        applyPasteText(true);
+        toast('사진에서 읽어서 채웠어요 · 확인하고 저장해 주세요');
+      }else{
+        toast('글자를 잘 못 읽었어요 · 직접 입력하거나 텍스트 붙여넣기를 이용해 주세요');
+      }
+    }catch(err){
+      hint.textContent=hintBefore;
+      toast('사진 인식에 실패했어요. 텍스트 붙여넣기를 이용해 주세요');
+    }
+  };
+  $('#photoRemove').onclick=()=>{ formPhoto=null; showPhotoPreview(); };
+
+  $('#btnSave').onclick=async()=>{
+    const date=formDate||today();
+    const rec={
+      id:edit?edit.id:'r'+Date.now()+Math.random().toString(36).slice(2,6),
+      v:edit?edit.v:sheetV,
+      date, up:stamp(), type:formType,
+      title:$('#f_title').value.trim(),
+      shop:$('#f_shop').value.trim(),
+      km:$('#f_km').value, cost:$('#f_cost').value,
+      next:formNext, memo:$('#f_memo').value.trim(),
+      photo:formPhoto||''
+    };
+    if(!rec.title&&!rec.shop){toast('정비/검사 내용을 입력해 주세요');return;}
+    if(edit)recs=recs.map(x=>x.id===rec.id?rec:x); else recs.push(rec);
+    await save();closeSheet();render();toast(edit?'수정했습니다':'저장했습니다');doBackup(true);
+  };
+  $('#btnDelete').onclick=async()=>{
+    if(!edit)return;
+    recs=recs.map(x=>x.id===edit.id?{id:x.id,v:x.v,date:x.date,del:true,up:stamp()}:x);
+    await save();closeSheet();render();toast('삭제했습니다');doBackup(true);
+  };
+
+  /* ── 달력 ── */
+  function fmtK(d){
+    if(!d)return '';
+    const p=d.split('-').map(Number);
+    return p[0]+'년 '+p[1]+'월 '+p[2]+'일 ('+WD[new Date(p[0],p[1]-1,p[2]).getDay()]+')';
+  }
+  function paintDateBtns(){
+    $('#f_date').textContent=fmtK(formDate)||'날짜 선택';
+    const n=$('#f_next');
+    n.textContent=formNext?fmtK(formNext):'예정일 없음';
+    n.classList.toggle('empty',!formNext);
+  }
+  function pad(n){return String(n).padStart(2,'0');}
+  function openCal(t){
+    calTarget=t;calMode='day';
+    const b=(t==='date'?formDate:formNext)||today();
+    calY=+b.slice(0,4);calM=+b.slice(5,7);
+    $('#calClear').hidden=(t==='date');
+    paintCal();
+    $('#cal').hidden=false;$('#calBg').hidden=false;
+  }
+  function closeCal(){$('#cal').hidden=true;$('#calBg').hidden=true;}
+  function paintCal(){
+    const sel=calTarget==='date'?formDate:formNext, tdy=today();
+    const grid=$('#calGrid');
+    if(calMode==='month'){
+      $('#calTitle').textContent=calY+'년';
+      $('#calWeek').hidden=true;
+      grid.className='cal-grid months';
+      grid.innerHTML=Array.from({length:12},(_,i)=>
+        '<button class="cal-cell'+(i+1===calM?' sel':'')+'" data-m="'+(i+1)+'">'+(i+1)+'월</button>').join('');
+    }else{
+      $('#calTitle').textContent=calY+'년 '+calM+'월';
+      $('#calWeek').hidden=false;
+      grid.className='cal-grid';
+      const first=new Date(calY,calM-1,1).getDay();
+      const days=new Date(calY,calM,0).getDate();
+      let h='';
+      for(let i=0;i<first;i++)h+='<span class="cal-cell blank"></span>';
+      for(let d=1;d<=days;d++){
+        const iso=calY+'-'+pad(calM)+'-'+pad(d);
+        const w=(first+d-1)%7;
+        h+='<button class="cal-cell'+(w===0?' sun':w===6?' sat':'')+
+           (iso===tdy?' today':'')+(iso===sel?' sel':'')+'" data-d="'+iso+'">'+d+'</button>';
+      }
+      grid.innerHTML=h;
+    }
+  }
+  function setDate(iso){
+    if(calTarget==='date')formDate=iso; else formNext=iso;
+    paintDateBtns();paintCal();
+  }
+  $('#f_date').onclick=()=>openCal('date');
+  $('#f_next').onclick=()=>openCal('next');
+  $('#calBg').onclick=closeCal;
+  $('#calDone').onclick=closeCal;
+  $('#calTitle').onclick=()=>{calMode=calMode==='day'?'month':'day';paintCal();};
+  $('#calPrev').onclick=()=>{
+    if(calMode==='month')calY--;
+    else{calM--;if(calM<1){calM=12;calY--;}}
+    paintCal();
+  };
+  $('#calNext').onclick=()=>{
+    if(calMode==='month')calY++;
+    else{calM++;if(calM>12){calM=1;calY++;}}
+    paintCal();
+  };
+  $('#calToday').onclick=()=>{
+    calY=+today().slice(0,4);calM=+today().slice(5,7);calMode='day';
+    setDate(today());
+  };
+  $('#calClear').onclick=()=>{formNext='';paintDateBtns();closeCal();};
+  $('#calGrid').onclick=e=>{
+    const c=e.target.closest('.cal-cell');if(!c)return;
+    if(c.dataset.m){calM=+c.dataset.m;calMode='day';paintCal();}
+    else if(c.dataset.d)setDate(c.dataset.d);
+  };
+
+  /* ── 검색 / 백업 ── */
+  $('#btnSync').onclick=()=>driveResync();
+  $('#btnDriveAuth').onclick=async()=>{
+    const ok=await ensureDriveToken(true);
+    toast(ok?'구글 드라이브에 연결됐어요':'구글 드라이브 연결에 실패했어요');
+  };
+
+  search.oninput=render;
+  $('#clearSearch').onclick=()=>{search.value='';render();};
+  $('#btnBackup').onclick=()=>doBackup(false);
+  $('#btnRestore').onclick=()=>$('#fileInput').click();
+  $('#fileInput').onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=async()=>{
+      try{
+        const d=JSON.parse(rd.result);
+        if(!Array.isArray(d))throw 0;
+        recs=merge(recs,d);
+        await save();render();toast('복원했습니다 · 총 '+live().length+'건');
+      }catch(err){toast('파일을 읽지 못했습니다. JSON 백업 파일인지 확인해 주세요');}
+      e.target.value='';
+    };
+    rd.readAsText(f);
+  };
+
+  load();
+})();
+</script>
+
+</body>
+</html>
