@@ -1,0 +1,2415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>화물 매출 일지</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="description" content="화물 운송 매출/정산 기록 관리" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="화물 매출 일지" />
+<meta name="theme-color" content="#10151D" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<style>
+  :root {
+    --bg: #F1F3F5;
+    --surface: #FFFFFF;
+    --surface-alt: #E7EBEF;
+    --border: #D5DBE1;
+    --text: #1B2430;
+    --text-muted: #5B6673;
+    --accent: #B96A14;
+    --accent-strong: #8F5010;
+    --accent-on: #FFFFFF;
+    --positive: #227A55;
+    --positive-bg: #E3F1EA;
+    --negative: #B5392F;
+    --negative-bg: #FBE7E4;
+    --status-blue: #2B62A8;
+    --status-blue-bg: #E3EBF7;
+    --status-orange: #B8650E;
+    --status-orange-bg: #F8E7D2;
+    --shadow: 0 1px 2px rgba(27,36,48,0.06), 0 1px 1px rgba(27,36,48,0.04);
+    --radius: 8px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10151D;
+      --surface: #171E29;
+      --surface-alt: #1F2733;
+      --border: #2B3543;
+      --text: #E8ECF1;
+      --text-muted: #8D98A6;
+      --accent: #E8A33D;
+      --accent-strong: #F2B75C;
+      --accent-on: #1B1204;
+      --positive: #4CA97F;
+      --positive-bg: #16281F;
+      --negative: #E2685D;
+      --negative-bg: #2C1917;
+      --status-blue: #6FA3DE;
+      --status-blue-bg: #16293D;
+      --status-orange: #E0973F;
+      --status-orange-bg: #2E2210;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 1px 1px rgba(0,0,0,0.25);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10151D;
+    --surface: #171E29;
+    --surface-alt: #1F2733;
+    --border: #2B3543;
+    --text: #E8ECF1;
+    --text-muted: #8D98A6;
+    --accent: #E8A33D;
+    --accent-strong: #F2B75C;
+    --accent-on: #1B1204;
+    --positive: #4CA97F;
+    --positive-bg: #16281F;
+    --negative: #E2685D;
+    --negative-bg: #2C1917;
+    --status-blue: #6FA3DE;
+    --status-blue-bg: #16293D;
+    --status-orange: #E0973F;
+    --status-orange-bg: #2E2210;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 1px 1px rgba(0,0,0,0.25);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Work Sans", -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px 16px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 2px 8px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    font-size: 28px;
+    line-height: 1;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    flex-shrink: 0;
+  }
+  h1 {
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 700;
+    font-size: 26px;
+    letter-spacing: 0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .tagline {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat-label {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .stat-value {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.01em;
+    word-break: break-word;
+  }
+  .stat-value.positive { color: var(--positive); }
+  .stat-value.negative { color: var(--negative); }
+  .stat-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 {
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-head h2 { margin: 0; }
+  .count-pill {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  .search-row {
+    margin-bottom: 10px;
+    display: flex;
+    gap: 8px;
+  }
+  .search-row input {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .search-btn {
+    font: inherit;
+    font-weight: 600;
+    font-size: 14.5px;
+    background: var(--accent);
+    color: var(--accent-on);
+    border: none;
+    border-radius: 6px;
+    padding: 0 16px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    transition: background 0.12s ease, transform 0.05s ease;
+  }
+  .search-btn:hover { background: var(--accent-strong); }
+  .search-btn:active { transform: translateY(1px); }
+  .search-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .search-hint {
+    margin: 5px 2px 0;
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+  .copy-route-hint {
+    margin: 5px 2px 0;
+    font-size: 12.5px;
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline dotted;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .copy-route-hint:active {
+    opacity: 0.7;
+  }
+
+  .range-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 10px 0 4px;
+  }
+  .range-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .range-chip input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--accent);
+  }
+  .range-chip:has(input:checked) {
+    border-color: var(--accent);
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  }
+
+  .date-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 14px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .date-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-alt);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    padding: 4px 6px 4px 10px;
+    border-radius: 100px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+  }
+  .date-chip button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 2px;
+  }
+  .date-chip button:hover { color: var(--negative); }
+
+  .clickable-date {
+    cursor: pointer;
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+  }
+  .clickable-date:hover { color: var(--accent-strong); }
+
+  .month-select-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 0 10px;
+  }
+  .year-switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .year-switch button {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: var(--radius);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .year-switch button:hover { color: var(--text); border-color: var(--accent); }
+  .month-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin: 0 0 14px;
+  }
+  .month-chip {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 7px 0;
+    cursor: pointer;
+    text-align: center;
+    position: relative;
+  }
+  .month-chip:hover { color: var(--text); border-color: var(--accent); }
+  .month-chip.active {
+    border-color: var(--accent);
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  }
+  .month-chip.has-data::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .date-group-cell {
+    background: var(--surface-alt);
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 6px 10px !important;
+    white-space: nowrap;
+  }
+  .date-group-cell .clickable-date {
+    color: var(--text);
+    font-weight: 700;
+    margin-right: 8px;
+  }
+  .date-group-count {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .field-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .field-grid label.full { grid-column: 1 / -1; }
+
+  input {
+    font: inherit;
+    font-family: "Work Sans", sans-serif;
+    color: var(--text);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 10px;
+    font-size: 14.5px;
+    width: 100%;
+  }
+  input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  input::placeholder { color: var(--text-muted); opacity: 0.7; }
+
+  .btn-primary {
+    font: inherit;
+    font-weight: 600;
+    font-size: 14.5px;
+    background: var(--accent);
+    color: var(--accent-on);
+    border: none;
+    border-radius: 6px;
+    padding: 11px 18px;
+    width: 100%;
+    cursor: pointer;
+    transition: background 0.12s ease, transform 0.05s ease;
+  }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-primary:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+  .btn-secondary {
+    font: inherit;
+    font-weight: 600;
+    font-size: 14.5px;
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 18px;
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-sizing: border-box;
+  }
+  .btn-secondary:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .btn-secondary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .lookup-result {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    margin-top: 14px;
+  }
+  .lookup-result label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .lookup-result .btn-primary {
+    width: auto;
+    white-space: nowrap;
+    padding: 9px 16px;
+  }
+  @media (max-width: 420px) {
+    .lookup-result { flex-direction: column; align-items: stretch; }
+    .lookup-result .btn-primary { width: 100%; }
+  }
+
+  .io-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .io-row .btn-secondary { width: auto; flex: 1 1 140px; }
+  @media (max-width: 420px) {
+    .io-row { flex-direction: column; }
+    .io-row .btn-secondary { width: 100%; }
+  }
+  .io-textarea {
+    width: 100%;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-alt);
+    color: var(--text);
+    resize: vertical;
+    margin-top: 8px;
+    box-sizing: border-box;
+  }
+  .io-details { margin-top: 14px; }
+  .io-details summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .io-details .btn-secondary { margin-top: 8px; }
+
+  .save-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .save-status {
+    margin: 0;
+    font-size: 12.5px;
+    min-height: 16px;
+    color: var(--text-muted);
+  }
+  .save-status.error { color: var(--negative); }
+  .save-status.ok { color: var(--positive); }
+  .retry-btn {
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    background: none;
+    border: 1px solid var(--negative);
+    color: var(--negative);
+    border-radius: 100px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .retry-btn:hover { background: var(--negative-bg); }
+
+  .table-scroll { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  td.num, th.num {
+    text-align: right;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  td.dest { white-space: normal; max-width: 210px; }
+  .dropoff-tag {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  tr:last-child td { border-bottom: none; }
+  .negative-text { color: var(--negative); }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    border: 1px solid transparent;
+    font-family: "Work Sans", sans-serif;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .status-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-pill:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+  .status-pill.status-pending { background: var(--status-orange-bg); color: var(--status-orange); }
+  .status-pill.status-pending .dot { background: var(--status-orange); }
+  .status-pill.status-confirmed { background: var(--status-blue-bg); color: var(--status-blue); }
+  .status-pill.status-confirmed .dot { background: var(--status-blue); }
+  .status-pill.status-mismatch { background: var(--negative-bg); color: var(--negative); }
+  .status-pill.status-mismatch .dot { background: var(--negative); }
+
+  .row-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .del-btn, .edit-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .del-btn:hover { color: var(--negative); border-color: var(--negative); }
+  .edit-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .edit-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--status-orange-bg);
+    color: var(--status-orange);
+    border: 1px solid var(--status-orange);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .edit-banner button {
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    background: none;
+    border: 1px solid currentColor;
+    color: inherit;
+    border-radius: 100px;
+    padding: 3px 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .edit-banner button:hover { background: var(--surface); }
+
+  .empty-note {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    padding: 8px 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-primary { transition: none; }
+  }
+
+  @media (max-width: 420px) {
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+    .stat-value { font-size: 15px; }
+  }
+
+  .lock-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .lock-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 32px 26px;
+    max-width: 320px;
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .lock-icon {
+    font-size: 30px;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    margin-bottom: 4px;
+  }
+  .lock-title {
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    margin: 0;
+  }
+  .lock-sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0 0 10px;
+  }
+  #lockForm {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  #lockInput {
+    text-align: center;
+    letter-spacing: 8px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 20px;
+  }
+  .lock-error {
+    color: var(--negative);
+    font-size: 12.5px;
+    margin: 0;
+    min-height: 16px;
+  }
+
+  .relock-btn {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: var(--radius);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .relock-btn:hover { color: var(--text); border-color: var(--accent); }
+  .relock-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .topbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .data-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 950;
+    background: rgba(10, 12, 18, 0.6);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .data-modal-overlay.open { display: flex; }
+  .data-modal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 18px 16px 16px;
+    max-width: 480px;
+    width: 100%;
+    margin: 32px 0;
+    position: relative;
+  }
+  .data-modal-card h2 { padding-right: 34px; }
+  .data-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: var(--radius);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .data-modal-close:hover { color: var(--text); border-color: var(--accent); }
+
+  .dispatch-preview {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-alt);
+    font-size: 12.5px;
+  }
+  .dispatch-preview-row {
+    display: flex;
+    gap: 8px;
+    padding: 3px 0;
+  }
+  .dispatch-preview-row .label {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    width: 66px;
+  }
+  .dispatch-preview-row .value {
+    color: var(--text);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    word-break: break-word;
+  }
+  .dispatch-preview-row .value.missing {
+    color: var(--text-muted);
+    font-family: inherit;
+    font-style: italic;
+  }
+  .dispatch-preview-note {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    color: var(--text-muted);
+    font-size: 11.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-card">
+    <span class="lock-icon">🔒</span>
+    <h1 class="lock-title">화물 매출 일지</h1>
+    <p class="lock-sub">비밀번호를 입력하세요</p>
+    <form id="lockForm">
+      <input type="password" inputmode="numeric" id="lockInput" placeholder="••••" autocomplete="off" maxlength="12">
+      <button type="submit" class="btn-primary">잠금 해제</button>
+      <p class="lock-error" id="lockError" hidden>비밀번호가 올바르지 않습니다.</p>
+    </form>
+  </div>
+</div>
+
+<div class="app" id="appRoot" style="display:none">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🚚</span>
+      <div>
+        <h1>화물 매출 일지</h1>
+        <p class="tagline">그날의 행선지와 매출을 기록하면 일별·월별 합계를 자동으로 계산합니다</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="relock-btn" id="refreshBtn" title="새로고침" aria-label="새로고침">⟳</button>
+      <button type="button" class="relock-btn" id="dataTransferBtn" title="기기 간 데이터 이동" aria-label="기기 간 데이터 이동">🔃</button>
+      <button type="button" class="relock-btn" id="relockBtn" title="잠그기" aria-label="잠그기">🔒</button>
+    </div>
+  </header>
+
+  <section class="summary-grid" id="summaryGrid"></section>
+
+  <div class="data-modal-overlay" id="dataTransferOverlay">
+    <div class="data-modal-card" role="dialog" aria-modal="true" aria-labelledby="dataTransferTitle">
+      <button type="button" class="data-modal-close" id="dataTransferClose" title="닫기" aria-label="닫기">✕</button>
+      <h2 id="dataTransferTitle">기기 간 데이터 이동</h2>
+      <p class="search-hint">자동 동기화는 안 되지만, 이 기능으로 한 기기의 기록을 다른 기기로 옮길 수 있어요. 내보내기 → 파일(또는 텍스트)을 다른 기기로 전달 → 가져오기 순서로 쓰시면 됩니다. 가져오기는 기존 기록을 지우지 않고 합쳐집니다.</p>
+      <div class="io-row">
+        <button type="button" class="btn-secondary" id="exportBtn">내보내기</button>
+        <button type="button" class="btn-secondary" id="importBtn">파일로 가져오기</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <p class="save-status" id="ioStatus" role="status" aria-live="polite"></p>
+      <p class="search-hint">Google 계정으로 로그인해두면 기록을 저장·삭제할 때마다 자동으로 드라이브에 백업되고, 앱을 열 때마다 최신 백업을 불러와 합쳐줘요. (이 기기의 브라우저에서 처음 한 번은 로그인이 필요해요.)</p>
+      <div class="io-row">
+        <button type="button" class="btn-secondary" id="driveExportBtn">Google 드라이브 로그인 / 동기화</button>
+        <button type="button" class="btn-secondary" id="driveSignOutBtn">로그아웃</button>
+      </div>
+      <p class="save-status" id="driveStatus" role="status" aria-live="polite"></p>
+      <div id="exportFallbackWrap" hidden>
+        <p class="search-hint">파일로 저장할 수 없는 화면이에요. 아래 내용을 눌러 전체 선택한 뒤 복사해서, 다른 기기의 "텍스트로 가져오기"에 붙여넣으세요.</p>
+        <textarea id="exportFallbackText" class="io-textarea" readonly rows="4"></textarea>
+      </div>
+      <details class="io-details">
+        <summary>텍스트로 가져오기</summary>
+        <textarea id="importText" class="io-textarea" rows="4" placeholder="다른 기기에서 복사한 내보내기 텍스트를 여기에 붙여넣으세요"></textarea>
+        <button type="button" class="btn-secondary" id="importTextBtn">붙여넣은 내용 가져오기</button>
+      </details>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>오더 문자로 자동 입력</h2>
+    <p class="search-hint">카톡이나 문자로 받은 오더 내용을 그대로 붙여넣으면 날짜·상차지·도착지·컨테이너 번호를 찾아서 아래 칸과 운행 기록 칸에 자동으로 채워드려요. 화주나 도착 시간처럼 표시가 애매한 내용은 직접 확인해서 넣어주세요.</p>
+    <textarea id="dispatchText" class="io-textarea" rows="6" placeholder="예)
+8/24 (월)
+상차지 : 동원냉장
+하차지 : BCT 컨테이너 터미널
+컨넘버 : MSNU5469080"></textarea>
+    <button type="button" class="btn-primary" id="parseDispatchBtn">추출해서 채우기</button>
+    <div class="dispatch-preview" id="dispatchPreview" hidden></div>
+  </section>
+
+  <section class="card">
+    <h2>안전운임 요금 조회</h2>
+    <p class="search-hint">도착지를 입력하고 계산기를 열면 운행 기록 칸의 상차지와 합쳐 "출발지 → 도착지" 텍스트가 자동으로 복사됩니다. 계산기 화면에서 붙여넣기로 빠르게 입력하고, 확인한 금액은 아래에 입력하면 운행 기록 칸에 바로 채워드립니다.</p>
+    <div class="field-grid">
+      <label class="full">도착지 (작업지)
+        <input type="text" id="qTo" placeholder="예: 대전 물류센터">
+      </label>
+    </div>
+    <p class="copy-route-hint" id="copyRouteHint" hidden>📋 눌러서 "출발지 → 도착지" 바로 복사하기</p>
+    <input type="text" id="qFrom" hidden>
+    <input type="text" id="qDropoff" hidden>
+    <input type="text" id="qClient" hidden>
+    <input type="text" id="qContainer" hidden>
+    <a href="https://www.forwarder.kr/tariff/?quarter=2026_2&amp;chg_type=%EC%95%88%EC%A0%84%EC%9C%84%ED%83%81%EC%9A%B4%EC%9E%84&amp;stitle=%EB%B6%80%EC%82%B0%EC%8B%A0%ED%95%AD%EA%B8%B0%EC%A0%90&amp;Send_region1=&amp;Send_region2=&amp;Send_region3=&amp;extra4_pct=20&amp;extra6_pct=20&amp;extra7_pct=20&amp;extra5=&amp;extra10=&amp;extra9=" target="_blank" rel="noopener noreferrer" class="btn-secondary" id="openForwarderLink">forwarder.kr 안전운임 계산기 열기 ↗</a>
+    <p class="search-hint" id="copyHint" hidden>"<span id="copyHintText"></span>" 복사됨 — 계산기에서 붙여넣기 하세요.</p>
+    <p class="search-hint" id="linkFallback">버튼을 눌러도 안 열리면 이 주소를 브라우저에 직접 입력해주세요: www.forwarder.kr/tariff/</p>
+    <div class="lookup-result">
+      <label>확인한 요금 (원)
+        <input type="number" inputmode="numeric" id="qFee" placeholder="계산기에서 확인한 금액">
+      </label>
+      <button type="button" class="btn-primary" id="fillFromLookup">운행 기록에 채우기</button>
+    </div>
+  </section>
+
+  <section class="card form-card">
+    <h2 id="formTitle">오늘 운행 기록 추가</h2>
+    <div class="edit-banner" id="editBanner" hidden>
+      <span>운행 기록을 수정하고 있어요</span>
+      <button type="button" id="cancelEdit">취소</button>
+    </div>
+    <form id="entryForm">
+      <div class="field-grid">
+        <label>날짜
+          <input type="date" id="fDate" required>
+        </label>
+        <label>컨테이너 번호
+          <input type="text" id="fContainer" placeholder="예: TCLU1234567" autocapitalize="characters">
+        </label>
+        <label class="full">상차지
+          <input type="text" id="fPickup" placeholder="예: 부산 신항" required>
+        </label>
+        <label class="full">행선지 (도착지 / 작업지)
+          <input type="text" id="fDest" placeholder="예: 대전 물류센터" required>
+        </label>
+        <label class="full">하차지 (선택)
+          <input type="text" id="fDropoff" placeholder="예: BCT 컨테이너 터미널">
+        </label>
+        <label>화주 / 거래처
+          <input type="text" id="fClient" placeholder="예: OO물류">
+        </label>
+        <label>매출 (원)
+          <input type="number" inputmode="numeric" id="fRevenue" placeholder="0" required min="0" step="1">
+        </label>
+        <label>거리 (km)
+          <input type="number" inputmode="numeric" id="fDistance" placeholder="0" min="0" step="1">
+        </label>
+        <label>유류비 (원)
+          <input type="number" inputmode="numeric" id="fFuel" placeholder="0" min="0" step="1">
+        </label>
+      </div>
+      <button type="submit" class="btn-primary" id="entrySubmitBtn">기록 추가</button>
+      <div class="save-row">
+        <p class="save-status" id="saveStatus" role="status" aria-live="polite">변경 사항은 이 기기에 자동으로 저장됩니다.</p>
+        <button type="button" class="retry-btn" id="retrySave" hidden>다시 저장</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>운행 기록</h2>
+      <span class="count-pill" id="entryCount">0건</span>
+    </div>
+    <div class="search-row">
+      <input type="text" id="searchContainer" placeholder="컨테이너 번호·상차지·도착지·하차지·화주로 검색" autocapitalize="characters">
+      <button type="button" class="search-btn" id="searchBtn" aria-label="검색">검색</button>
+    </div>
+    <p class="search-hint">컨테이너 번호·상차지·도착지·하차지·화주 중 아무 걸로나 검색할 수 있어요. 월말 하불명세서와 대조할 때 컨테이너 번호로 찾으면 편합니다. 정산 배지를 누르면 확인필요 → 확인됨 → 불일치 순으로 바뀝니다.</p>
+    <div class="range-filters" id="rangeFilters">
+      <label class="range-chip"><input type="checkbox" id="range30" value="30"> 최근 30일</label>
+      <label class="range-chip"><input type="checkbox" id="range60" value="60"> 최근 60일</label>
+      <label class="range-chip"><input type="checkbox" id="range90" value="90"> 최근 90일</label>
+    </div>
+    <div class="date-chip-row" id="dateChipRow" hidden>
+      <span id="dateChipDesc">선택한 날짜만 표시 중</span>
+      <span class="date-chip" id="dateChipLabel"></span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>날짜</th>
+            <th>컨테이너</th>
+            <th>정산</th>
+            <th>구간 (상차지 → 행선지)</th>
+            <th>화주</th>
+            <th class="num">매출</th>
+            <th class="num">유류비</th>
+            <th class="num">순이익</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="entryBody"></tbody>
+      </table>
+    </div>
+    <p class="empty-note" id="entryEmpty" hidden>아직 기록이 없습니다. 위에서 오늘 운행 내역을 추가해보세요.</p>
+  </section>
+
+  <section class="card">
+    <h2>일별 합계</h2>
+    <p class="search-hint">날짜를 누르면 그날 기록만 아래 운행 기록에서 볼 수 있어요.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>날짜</th>
+            <th class="num">운행</th>
+            <th class="num">매출</th>
+            <th class="num">유류비</th>
+            <th class="num">순이익</th>
+          </tr>
+        </thead>
+        <tbody id="dailyBody"></tbody>
+      </table>
+    </div>
+    <p class="empty-note" id="dailyEmpty" hidden>표시할 합계가 없습니다.</p>
+  </section>
+
+  <section class="card">
+    <h2>월별 합계</h2>
+    <p class="search-hint">월을 선택하면 그 달에 운송한 기록만 위 운행 기록 목록에 표시됩니다.</p>
+    <div class="month-select-row">
+      <div class="year-switch">
+        <button type="button" id="monthYearPrev" aria-label="이전 연도">‹</button>
+        <span id="monthYearLabel"></span>
+        <button type="button" id="monthYearNext" aria-label="다음 연도">›</button>
+      </div>
+    </div>
+    <div class="month-chip-grid" id="monthChipGrid"></div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>월</th>
+            <th class="num">운행일수</th>
+            <th class="num">매출</th>
+            <th class="num">유류비</th>
+            <th class="num">순이익</th>
+          </tr>
+        </thead>
+        <tbody id="monthlyBody"></tbody>
+      </table>
+    </div>
+    <p class="empty-note" id="monthlyEmpty" hidden>표시할 합계가 없습니다.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  var APP_PIN = "1234";
+
+  function isUnlocked() {
+    try { return localStorage.getItem("cargoLogUnlocked") === "1"; } catch (e) { return false; }
+  }
+  function setUnlocked(val) {
+    try {
+      if (val) localStorage.setItem("cargoLogUnlocked", "1");
+      else localStorage.removeItem("cargoLogUnlocked");
+    } catch (e) { /* storage unavailable — unlock still works for this page view */ }
+  }
+  function showApp() {
+    document.getElementById("lockScreen").style.display = "none";
+    document.getElementById("appRoot").style.display = "";
+  }
+  function showLock() {
+    document.getElementById("appRoot").style.display = "none";
+    document.getElementById("lockScreen").style.display = "flex";
+    var input = document.getElementById("lockInput");
+    input.value = "";
+    input.focus();
+  }
+
+  if (isUnlocked()) showApp();
+
+  document.getElementById("lockForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var val = document.getElementById("lockInput").value.trim();
+    var errorEl = document.getElementById("lockError");
+    if (val === APP_PIN) {
+      setUnlocked(true);
+      errorEl.hidden = true;
+      showApp();
+    } else {
+      errorEl.hidden = false;
+      document.getElementById("lockInput").value = "";
+      document.getElementById("lockInput").focus();
+    }
+  });
+
+  document.getElementById("relockBtn").addEventListener("click", function () {
+    setUnlocked(false);
+    showLock();
+  });
+
+  function closeDataTransfer() {
+    document.getElementById("dataTransferOverlay").classList.remove("open");
+  }
+  document.getElementById("dataTransferBtn").addEventListener("click", function () {
+    document.getElementById("dataTransferOverlay").classList.add("open");
+    performDriveExport();
+  });
+  document.getElementById("dataTransferClose").addEventListener("click", closeDataTransfer);
+  document.getElementById("dataTransferOverlay").addEventListener("click", function (e) {
+    if (e.target === this) closeDataTransfer();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && document.getElementById("dataTransferOverlay").classList.contains("open")) {
+      closeDataTransfer();
+    }
+  });
+
+  var entries = [];
+  var loaded = false;
+  var activeDateFilter = null;
+  var activeRangeDays = null;
+  var activeMonthFilter = null;
+  var monthChipYear = null;
+  var editingId = null;
+
+  function won(n) {
+    n = Number(n) || 0;
+    return (n < 0 ? "-₩" : "₩") + Math.abs(Math.round(n)).toLocaleString("ko-KR");
+  }
+
+  function todayStr() {
+    var d = new Date();
+    var tz = d.getTimezoneOffset() * 60000;
+    return new Date(d - tz).toISOString().slice(0, 10);
+  }
+
+  function monthOf(dateStr) {
+    return dateStr ? dateStr.slice(0, 7) : "";
+  }
+
+  function daysAgoStr(n) {
+    var d = new Date();
+    var tz = d.getTimezoneOffset() * 60000;
+    var local = new Date(d - tz);
+    local.setDate(local.getDate() - (n - 1));
+    return local.toISOString().slice(0, 10);
+  }
+
+  function fmtMonth(m) {
+    var parts = m.split("-");
+    return parts[0] + "년 " + parseInt(parts[1], 10) + "월";
+  }
+
+  function fmtDate(d) {
+    var parts = d.split("-");
+    return parts[0] + "." + parts[1] + "." + parts[2];
+  }
+
+  function uid() {
+    return "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  var STATUS_LABEL = { pending: "확인필요", confirmed: "확인됨", mismatch: "불일치" };
+  var STATUS_ORDER = { pending: "confirmed", confirmed: "mismatch", mismatch: "pending" };
+
+  function statusOf(e) {
+    return e.status && STATUS_LABEL[e.status] ? e.status : "pending";
+  }
+
+  function statusPillHtml(e) {
+    var s = statusOf(e);
+    return '<button type="button" class="status-pill status-' + s + '" data-id="' + e.id +
+      '" aria-label="정산 상태: ' + STATUS_LABEL[s] + ' (눌러서 변경)"><span class="dot"></span>' + STATUS_LABEL[s] + '</button>';
+  }
+
+  var BACKUP_KEY = "cargoLogEntriesBackup_v1";
+  var DRIVE_FILE_ID_KEY = "cargoLogDriveFileId_v1";
+
+  function getDriveFileId() {
+    try { return localStorage.getItem(DRIVE_FILE_ID_KEY) || null; } catch (e) { return null; }
+  }
+
+  function setDriveFileId(id) {
+    try {
+      if (id) localStorage.setItem(DRIVE_FILE_ID_KEY, id);
+      else localStorage.removeItem(DRIVE_FILE_ID_KEY);
+    } catch (e) { /* storage unavailable */ }
+  }
+
+  // Remembers ids deleted on this device so a background Drive pull (which may still
+  // hold an older copy) doesn't silently bring a just-deleted record back.
+  var DELETED_IDS_KEY = "cargoLogDeletedIds_v1";
+
+  function getDeletedIds() {
+    try {
+      var raw = localStorage.getItem(DELETED_IDS_KEY);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+
+  function addDeletedId(id) {
+    try {
+      var list = getDeletedIds();
+      if (list.indexOf(id) === -1) list.push(id);
+      if (list.length > 500) list = list.slice(list.length - 500);
+      localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(list));
+    } catch (e) { /* storage unavailable */ }
+  }
+
+  function backupLocally() {
+    try { localStorage.setItem(BACKUP_KEY, JSON.stringify(entries)); } catch (e) { /* storage unavailable */ }
+  }
+
+  function readLocalBackup() {
+    try {
+      var raw = localStorage.getItem(BACKUP_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      return Array.isArray(data) ? data : null;
+    } catch (e) { return null; }
+  }
+
+  function mergeEntries(serverList, localList) {
+    var map = {};
+    var order = [];
+    (serverList || []).forEach(function (e) {
+      if (e && e.id && !map[e.id]) { map[e.id] = e; order.push(e.id); }
+    });
+    var hasLocalOnly = false;
+    (localList || []).forEach(function (e) {
+      if (e && e.id && !map[e.id]) { map[e.id] = e; order.push(e.id); hasLocalOnly = true; }
+    });
+    return { merged: order.map(function (id) { return map[id]; }), hasLocalOnly: hasLocalOnly };
+  }
+
+  var IDLE_STATUS = "변경 사항은 이 기기에 자동으로 저장됩니다.";
+
+  function setStatus(msg, kind, showRetry) {
+    var el = document.getElementById("saveStatus");
+    var retry = document.getElementById("retrySave");
+    el.textContent = msg || IDLE_STATUS;
+    el.className = "save-status" + (kind ? " " + kind : "");
+    retry.hidden = !showRetry;
+  }
+
+  // 이 자체 호스팅 버전에서는 Claude Artifact의 "art.publish" 저장소가 없어요 —
+  // 이 기기 저장은 localStorage로, 기기 간 동기화는 아래의 Google 드라이브 연동으로 합니다.
+  async function persist() {
+    backupLocally();
+    setStatus("저장됨", "ok", false);
+    setTimeout(function () { setStatus(IDLE_STATUS); }, 2000);
+  }
+
+  document.getElementById("retrySave").addEventListener("click", function () {
+    setStatus("저장 중…", null, false);
+    persist();
+  });
+
+  function render() {
+    renderSummary();
+    renderEntries();
+    renderDaily();
+    renderMonthly();
+    renderMonthChips();
+  }
+
+  function renderSummary() {
+    var grid = document.getElementById("summaryGrid");
+    var today = todayStr();
+    var selected = document.getElementById("fDate").value || today;
+    var thisMonth = monthOf(today);
+
+    var selectedRows = entries.filter(function (e) { return e.date === selected; });
+    var monthRows = entries.filter(function (e) { return monthOf(e.date) === thisMonth; });
+
+    var selectedRevenue = selectedRows.reduce(function (s, e) { return s + e.revenue; }, 0);
+    var monthRevenue = monthRows.reduce(function (s, e) { return s + e.revenue; }, 0);
+    var monthNet = monthRows.reduce(function (s, e) { return s + (e.revenue - e.fuel); }, 0);
+
+    var selectedLabel = selected === today ? "오늘 매출" : fmtDate(selected) + " 매출";
+
+    var cards = [
+      { label: selectedLabel, value: won(selectedRevenue), sub: selectedRows.length + "건" },
+      { label: "이번 달 매출", value: won(monthRevenue), sub: monthRows.length + "건" },
+      { label: "이번 달 순이익", value: won(monthNet), sub: "매출 − 유류비", cls: monthNet < 0 ? "negative" : "positive" }
+    ];
+
+    grid.innerHTML = cards.map(function (c) {
+      return '<div class="stat-card"><span class="stat-label">' + c.label + '</span>' +
+        '<span class="stat-value' + (c.cls ? " " + c.cls : "") + '">' + c.value + '</span>' +
+        '<span class="stat-sub">' + c.sub + '</span></div>';
+    }).join("");
+  }
+
+  function renderEntries() {
+    var body = document.getElementById("entryBody");
+    var empty = document.getElementById("entryEmpty");
+    var chipRow = document.getElementById("dateChipRow");
+    var chipLabel = document.getElementById("dateChipLabel");
+    var query = (document.getElementById("searchContainer").value || "").trim().toLowerCase();
+
+    var sorted = entries.slice().sort(function (a, b) {
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt < b.createdAt ? 1 : -1);
+    });
+
+    var filtered, countLabel, emptyMsg;
+
+    if (activeDateFilter) {
+      chipRow.style.display = "flex";
+      document.getElementById("dateChipDesc").textContent = "선택한 날짜만 표시 중";
+      chipLabel.innerHTML = fmtDate(activeDateFilter) + ' <button type="button" id="clearDateFilterBtn" aria-label="날짜 필터 해제" title="날짜 필터 해제">×</button>';
+      filtered = sorted.filter(function (e) { return e.date === activeDateFilter; });
+      countLabel = filtered.length + "건";
+      emptyMsg = fmtDate(activeDateFilter) + "에는 기록이 없습니다.";
+    } else if (activeMonthFilter) {
+      chipRow.style.display = "flex";
+      document.getElementById("dateChipDesc").textContent = "선택한 달만 표시 중";
+      chipLabel.innerHTML = fmtMonth(activeMonthFilter) + ' <button type="button" id="clearDateFilterBtn" aria-label="월 필터 해제" title="월 필터 해제">×</button>';
+      filtered = sorted.filter(function (e) { return monthOf(e.date) === activeMonthFilter; });
+      countLabel = filtered.length + "건";
+      emptyMsg = fmtMonth(activeMonthFilter) + "에는 기록이 없습니다.";
+    } else {
+      chipRow.style.display = "none";
+      filtered = sorted;
+      if (query) {
+        filtered = filtered.filter(function (e) {
+          return (e.containerNo || "").toLowerCase().indexOf(query) !== -1 ||
+            (e.pickup || "").toLowerCase().indexOf(query) !== -1 ||
+            (e.dest || "").toLowerCase().indexOf(query) !== -1 ||
+            (e.dropoff || "").toLowerCase().indexOf(query) !== -1 ||
+            (e.client || "").toLowerCase().indexOf(query) !== -1;
+        });
+      }
+      if (activeRangeDays) {
+        var threshold = daysAgoStr(activeRangeDays);
+        filtered = filtered.filter(function (e) { return e.date >= threshold; });
+      }
+      var isFiltered = !!(query || activeRangeDays);
+      countLabel = isFiltered ? filtered.length + "건 / 전체 " + entries.length + "건" : entries.length + "건";
+      emptyMsg = query
+        ? "\"" + document.getElementById("searchContainer").value.trim() + "\"와 일치하는 기록이 없습니다."
+        : (activeRangeDays ? "최근 " + activeRangeDays + "일 동안 기록이 없습니다." : "아직 기록이 없습니다. 위에서 오늘 운행 내역을 추가해보세요.");
+    }
+
+    document.getElementById("entryCount").textContent = countLabel;
+
+    if (filtered.length === 0) {
+      body.innerHTML = "";
+      empty.hidden = false;
+      empty.textContent = emptyMsg;
+      return;
+    }
+    empty.hidden = true;
+
+    var countByDate = {};
+    filtered.forEach(function (e) { countByDate[e.date] = (countByDate[e.date] || 0) + 1; });
+
+    var rowsHtml = [];
+    var lastGroupDate = null;
+    filtered.forEach(function (e) {
+      if (e.date !== lastGroupDate) {
+        lastGroupDate = e.date;
+        rowsHtml.push(
+          '<tr class="date-group-row"><td colspan="9" class="date-group-cell">' +
+          '<span class="clickable-date" data-date="' + e.date + '">' + fmtDate(e.date) + '</span>' +
+          '<span class="date-group-count">' + countByDate[e.date] + '건</span>' +
+          '</td></tr>'
+        );
+      }
+      var net = e.revenue - e.fuel;
+      rowsHtml.push(
+        '<tr>' +
+        '<td class="clickable-date" data-date="' + e.date + '">' + fmtDate(e.date) + '</td>' +
+        '<td>' + escapeHtml(e.containerNo || "—") + '</td>' +
+        '<td>' + statusPillHtml(e) + '</td>' +
+        '<td class="dest">' + escapeHtml(e.pickup || "—") + ' → ' + escapeHtml(e.dest) +
+          (e.dropoff ? ' <span class="dropoff-tag">→ 하차: ' + escapeHtml(e.dropoff) + '</span>' : "") + '</td>' +
+        '<td>' + escapeHtml(e.client || "—") + '</td>' +
+        '<td class="num">' + won(e.revenue) + '</td>' +
+        '<td class="num">' + (e.fuel ? won(e.fuel) : "—") + '</td>' +
+        '<td class="num' + (net < 0 ? ' negative-text' : '') + '">' + won(net) + '</td>' +
+        '<td><div class="row-actions">' +
+          '<button type="button" class="edit-btn" data-id="' + e.id + '" aria-label="수정" title="수정">✎</button>' +
+          '<button type="button" class="del-btn" data-id="' + e.id + '" aria-label="삭제" title="삭제">×</button>' +
+        '</div></td>' +
+        '</tr>'
+      );
+    });
+    body.innerHTML = rowsHtml.join("");
+  }
+
+  function selectDate(date) {
+    activeDateFilter = date;
+    activeRangeDays = null;
+    var hadMonthFilter = !!activeMonthFilter;
+    activeMonthFilter = null;
+    document.getElementById("searchContainer").value = "";
+    ["range30", "range60", "range90"].forEach(function (id) {
+      document.getElementById(id).checked = false;
+    });
+    renderEntries();
+    if (hadMonthFilter) renderMonthChips();
+    var card = document.getElementById("entryCount").closest(".card");
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (card) card.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }
+
+  function clearDateFilter() {
+    activeDateFilter = null;
+    activeMonthFilter = null;
+    renderEntries();
+    renderMonthChips();
+  }
+
+  function selectMonth(monthKey) {
+    activeMonthFilter = monthKey;
+    activeDateFilter = null;
+    activeRangeDays = null;
+    document.getElementById("searchContainer").value = "";
+    ["range30", "range60", "range90"].forEach(function (id) {
+      document.getElementById(id).checked = false;
+    });
+    monthChipYear = Number(monthKey.slice(0, 4));
+    renderEntries();
+    renderMonthChips();
+    var card = document.getElementById("entryCount").closest(".card");
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (card) card.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }
+
+  function renderMonthChips() {
+    if (monthChipYear === null) monthChipYear = Number(todayStr().slice(0, 4));
+    document.getElementById("monthYearLabel").textContent = monthChipYear + "년";
+    var dataMonths = {};
+    entries.forEach(function (e) { dataMonths[monthOf(e.date)] = true; });
+    var html = "";
+    for (var m = 1; m <= 12; m++) {
+      var mm = (m < 10 ? "0" : "") + m;
+      var key = monthChipYear + "-" + mm;
+      var cls = "month-chip";
+      if (activeMonthFilter === key) cls += " active";
+      if (dataMonths[key]) cls += " has-data";
+      html += '<button type="button" class="' + cls + '" data-month="' + key + '">' + m + '월</button>';
+    }
+    document.getElementById("monthChipGrid").innerHTML = html;
+  }
+
+  function startEdit(id) {
+    var e = entries.find(function (x) { return x.id === id; });
+    if (!e) return;
+    editingId = id;
+    document.getElementById("fDate").value = e.date;
+    document.getElementById("fContainer").value = e.containerNo || "";
+    document.getElementById("fPickup").value = e.pickup || "";
+    document.getElementById("fDest").value = e.dest || "";
+    document.getElementById("fDropoff").value = e.dropoff || "";
+    document.getElementById("fClient").value = e.client || "";
+    document.getElementById("fRevenue").value = e.revenue || "";
+    document.getElementById("fDistance").value = e.distance || "";
+    document.getElementById("fFuel").value = e.fuel || "";
+    document.getElementById("editBanner").hidden = false;
+    document.getElementById("formTitle").textContent = "운행 기록 수정";
+    document.getElementById("entrySubmitBtn").textContent = "수정 저장";
+    renderSummary();
+
+    var formCard = document.getElementById("entryForm").closest(".card");
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (formCard) formCard.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    document.getElementById("entryForm").reset();
+    document.getElementById("fDate").value = todayStr();
+    document.getElementById("editBanner").hidden = true;
+    document.getElementById("formTitle").textContent = "오늘 운행 기록 추가";
+    document.getElementById("entrySubmitBtn").textContent = "기록 추가";
+    renderSummary();
+  }
+
+  document.getElementById("cancelEdit").addEventListener("click", cancelEdit);
+  document.getElementById("fDate").addEventListener("input", renderSummary);
+  document.getElementById("fDate").addEventListener("change", renderSummary);
+
+  function mergeImport(list) {
+    if (!Array.isArray(list)) return null;
+    var valid = list.filter(function (e) { return e && typeof e === "object" && e.id && e.date; });
+    if (!valid.length) return null;
+
+    var beforeIds = {};
+    entries.forEach(function (e) { if (e && e.id) beforeIds[e.id] = true; });
+    var added = 0, updated = 0;
+    valid.forEach(function (e) {
+      if (beforeIds[e.id]) updated++; else added++;
+    });
+
+    var map = {};
+    var order = [];
+    entries.forEach(function (e) { if (e && e.id) { map[e.id] = e; order.push(e.id); } });
+    valid.forEach(function (e) {
+      if (!map[e.id]) order.push(e.id);
+      map[e.id] = e;
+    });
+    entries = order.map(function (id) { return map[id]; });
+
+    if (editingId && !entries.find(function (e) { return e.id === editingId; })) cancelEdit();
+
+    backupLocally();
+    render();
+    setStatus("저장 중…");
+    persist();
+    autoDriveSync();
+    return { added: added, updated: updated };
+  }
+
+  document.getElementById("exportBtn").addEventListener("click", async function () {
+    var ioStatus = document.getElementById("ioStatus");
+    var wrap = document.getElementById("exportFallbackWrap");
+    wrap.hidden = true;
+    if (!entries.length) {
+      ioStatus.textContent = "내보낼 기록이 없습니다.";
+      ioStatus.className = "save-status error";
+      return;
+    }
+    var filename = "화물매출기록_" + todayStr().replace(/-/g, "") + ".json";
+    var data = JSON.stringify(entries, null, 2);
+    try {
+      var blob = new Blob([data], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      ioStatus.textContent = "내보내기 완료 (" + entries.length + "건)";
+      ioStatus.className = "save-status ok";
+    } catch (err) {
+      document.getElementById("exportFallbackText").value = data;
+      wrap.hidden = false;
+      ioStatus.textContent = "파일로 저장할 수 없어 텍스트로 대신 보여드려요.";
+      ioStatus.className = "save-status error";
+    }
+  });
+
+  document.getElementById("exportFallbackText").addEventListener("click", function () {
+    this.select();
+  });
+
+  var DRIVE_FILE_TITLE = "화물매출기록.json";
+  var driveSyncBusy = false;
+  var driveSyncQueued = false;
+
+  // ---- 자체 호스팅 버전의 Google 드라이브 연동 ----
+  // Claude Artifact 안에서는 이미 연결된 Google Drive 연동을 그냥 썼지만, 여기서는
+  // 이 앱 자신의 Google OAuth 클라이언트로 직접 로그인 → Drive REST API를 호출합니다.
+  var DRIVE_CLIENT_ID = "104858973577-7naknkqhdaaav9lghv3m6cfca1s53scr.apps.googleusercontent.com";
+  var DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+  var driveAccessToken = null;
+  var driveTokenClient = null;
+
+  function getDriveTokenClient() {
+    if (driveTokenClient) return driveTokenClient;
+    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) return null;
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: DRIVE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: function () {}
+    });
+    return driveTokenClient;
+  }
+
+  // interactive=true면 필요할 때 구글 로그인/동의 화면을 띄웁니다.
+  // interactive=false면 화면 없이 조용히 시도만 하고, 안 되면 그냥 null.
+  function requestDriveToken(interactive) {
+    return new Promise(function (resolve) {
+      var client = getDriveTokenClient();
+      if (!client) { resolve(null); return; }
+      client.callback = function (resp) {
+        driveAccessToken = (resp && resp.access_token) || null;
+        resolve(driveAccessToken);
+      };
+      client.error_callback = function () { resolve(null); };
+      try {
+        client.requestAccessToken({ prompt: interactive ? "consent" : "" });
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+
+  function ensureDriveToken(interactive) {
+    if (driveAccessToken) return Promise.resolve(driveAccessToken);
+    return requestDriveToken(interactive);
+  }
+
+  function driveSignOut() {
+    if (driveAccessToken && window.google && google.accounts && google.accounts.oauth2) {
+      try { google.accounts.oauth2.revoke(driveAccessToken, function () {}); } catch (e) {}
+    }
+    driveAccessToken = null;
+  }
+
+  function driveEscapeQuote(s) {
+    return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  }
+
+  function driveApiUrl(path, params) {
+    var url = "https://www.googleapis.com/drive/v3/" + path;
+    var keys = params ? Object.keys(params) : [];
+    if (keys.length) {
+      url += "?" + keys.map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
+    }
+    return url;
+  }
+
+  async function driveApiFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    opts.headers["Authorization"] = "Bearer " + driveAccessToken;
+    var res = await fetch(url, opts);
+    if (res.status === 401) {
+      driveAccessToken = null;
+      var authErr = new Error("Drive 인증이 만료됐어요.");
+      authErr.code = "needs_reauth";
+      throw authErr;
+    }
+    if (!res.ok) {
+      var text = "";
+      try { text = await res.text(); } catch (e2) { /* ignore */ }
+      var err = new Error("Drive API error " + res.status + ": " + text);
+      err.code = res.status === 403 ? "not_granted" : (res.status === 429 ? "rate_limited" : "upstream_error");
+      throw err;
+    }
+    return res;
+  }
+
+  // Drive 검색은 같은 제목의 파일이 여러 페이지에 나뉘어 나올 수 있고 최신순이 아니라서,
+  // 전체 페이지를 다 모은(최대 10페이지) 뒤 직접 최신순으로 정렬합니다.
+  async function driveFindFiles() {
+    var all = [];
+    var pageToken;
+    var guard = 0;
+    do {
+      var q = "name = '" + driveEscapeQuote(DRIVE_FILE_TITLE) + "' and trashed = false";
+      var params = { q: q, fields: "files(id,name,modifiedTime),nextPageToken", spaces: "drive", pageSize: "100" };
+      if (pageToken) params.pageToken = pageToken;
+      var res = await driveApiFetch(driveApiUrl("files", params));
+      var payload = await res.json();
+      all = all.concat(payload.files || []);
+      pageToken = payload.nextPageToken;
+      guard++;
+    } while (pageToken && guard < 10);
+    all.sort(function (a, b) {
+      return (b.modifiedTime || "").localeCompare(a.modifiedTime || "");
+    });
+    return all;
+  }
+
+  async function driveDownloadEntries(fileId) {
+    var res = await driveApiFetch(driveApiUrl("files/" + encodeURIComponent(fileId), { alt: "media" }));
+    var text = await res.text();
+    if (!text) return null;
+    var list;
+    try { list = JSON.parse(text); } catch (e) { return null; }
+    return Array.isArray(list) ? list : null;
+  }
+
+  async function driveUpload(list) {
+    var metadata = { name: DRIVE_FILE_TITLE, mimeType: "application/json" };
+    var boundary = "-------cargolog" + Date.now();
+    var body =
+      "--" + boundary + "\r\n" +
+      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+      JSON.stringify(metadata) + "\r\n" +
+      "--" + boundary + "\r\n" +
+      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+      JSON.stringify(list, null, 2) + "\r\n" +
+      "--" + boundary + "--";
+    var res = await driveApiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+      method: "POST",
+      headers: { "Content-Type": "multipart/related; boundary=" + boundary },
+      body: body
+    });
+    var result = await res.json();
+    var newId = result && result.id;
+    if (newId) setDriveFileId(newId);
+    return newId;
+  }
+
+  async function driveTrashIfExists(fileId) {
+    if (!fileId) return;
+    try {
+      await driveApiFetch(driveApiUrl("files/" + encodeURIComponent(fileId)), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trashed: true })
+      });
+    } catch (e) { /* already gone, or a race with another device — ignore */ }
+  }
+
+  // Pulls the latest Drive backup (if any), merges it into this device's records,
+  // then pushes the merged set back to Drive. Used by both the silent auto-sync
+  // (after every save/delete, and on app open) and the manual button in the panel.
+  async function driveSyncCore() {
+    var token = await ensureDriveToken(false);
+    if (!token) { var noAuth = new Error("Drive 로그인이 필요해요."); noAuth.code = "needs_signin"; throw noAuth; }
+
+    var allFound = [];
+    try { allFound = await driveFindFiles(); } catch (e) { allFound = []; }
+    var found = allFound[0] || null;
+
+    var driveList = null;
+    if (found) {
+      try { driveList = await driveDownloadEntries(found.id); } catch (e) { driveList = null; }
+    }
+
+    var toUpload = entries;
+    var mergedIn = false;
+    if (driveList) {
+      // This device's current state wins on shared ids (it's the freshest — especially
+      // right after a save/edit/delete); records that only exist on Drive (added from
+      // another device) are pulled in on top of that.
+      var mergeResult = mergeEntries(entries, driveList);
+      toUpload = mergeResult.merged;
+      var deletedIds = getDeletedIds();
+      if (deletedIds.length) {
+        toUpload = toUpload.filter(function (e) { return deletedIds.indexOf(e.id) === -1; });
+      }
+      var changed = toUpload.length !== entries.length;
+      if (!changed) {
+        for (var i = 0; i < toUpload.length; i++) {
+          if (!entries[i] || entries[i].id !== toUpload[i].id) { changed = true; break; }
+        }
+      }
+      if (changed) {
+        entries = toUpload;
+        backupLocally();
+        render();
+        mergedIn = true;
+      }
+    }
+
+    if (!toUpload.length) return { count: 0, mergedIn: mergedIn };
+
+    var previousLocalId = getDriveFileId();
+    var newId = await driveUpload(toUpload);
+
+    var idsToTrash = [];
+    allFound.forEach(function (f) {
+      if (f.id !== newId && idsToTrash.indexOf(f.id) === -1) idsToTrash.push(f.id);
+    });
+    if (previousLocalId && previousLocalId !== newId && idsToTrash.indexOf(previousLocalId) === -1) idsToTrash.push(previousLocalId);
+    for (var j = 0; j < idsToTrash.length; j++) { await driveTrashIfExists(idsToTrash[j]); }
+
+    return { count: toUpload.length, mergedIn: mergedIn };
+  }
+
+  // Silent background sync — called after every save/delete/status change and on app open.
+  // Failures are not shown to the driver (e.g. not signed in yet); they'd just be noise on
+  // every single save. Opening the data-transfer panel and using the manual button (which
+  // signs in interactively if needed) surfaces real errors.
+  function autoDriveSync() {
+    if (driveSyncBusy) { driveSyncQueued = true; return; }
+    driveSyncBusy = true;
+    driveSyncCore().then(function () {
+      driveSyncBusy = false;
+      if (driveSyncQueued) { driveSyncQueued = false; autoDriveSync(); }
+    }).catch(function () {
+      driveSyncBusy = false;
+      if (driveSyncQueued) { driveSyncQueued = false; autoDriveSync(); }
+    });
+  }
+
+  async function performDriveExport() {
+    var driveStatus = document.getElementById("driveStatus");
+    var btn = document.getElementById("driveExportBtn");
+    btn.disabled = true;
+    driveStatus.textContent = "Google 계정 확인 중...";
+    driveStatus.className = "save-status";
+    try {
+      var token = await ensureDriveToken(true); // 필요하면 로그인/동의 화면을 띄움
+      if (!token) {
+        driveStatus.textContent = "Google 로그인이 필요해요. 버튼을 다시 눌러 로그인해주세요.";
+        driveStatus.className = "save-status error";
+        return;
+      }
+      driveStatus.textContent = "Google 드라이브와 동기화하는 중...";
+      var result = await driveSyncCore();
+      if (result.count === 0) {
+        driveStatus.textContent = "내보낼 기록이 없습니다.";
+        driveStatus.className = "save-status error";
+      } else {
+        driveStatus.textContent = (result.mergedIn ? "다른 기기 기록과 합쳐서 " : "") +
+          "Google 드라이브 동기화 완료 (" + result.count + "건) — 이제 기록을 저장/삭제할 때마다 자동으로 백업됩니다.";
+        driveStatus.className = "save-status ok";
+      }
+    } catch (err) {
+      var code = err && err.code;
+      if (code === "needs_signin" || code === "needs_reauth") {
+        driveStatus.textContent = "Google 로그인이 필요하거나 만료됐어요. 버튼을 다시 눌러주세요.";
+      } else if (code === "not_granted") {
+        driveStatus.textContent = "Google 드라이브 접근 권한이 없어요. 로그인할 때 권한 허용을 눌러주세요.";
+      } else if (code === "rate_limited") {
+        driveStatus.textContent = "요청이 너무 잦아요. 잠시 후 다시 시도해주세요.";
+      } else if (code === "upstream_error") {
+        driveStatus.textContent = "Google 드라이브에 잠시 연결할 수 없어요. 잠시 후 다시 시도해주세요.";
+      } else {
+        driveStatus.textContent = "드라이브 동기화에 실패했어요. 위의 '내보내기'로 파일을 저장해주세요.";
+      }
+      driveStatus.className = "save-status error";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById("driveExportBtn").addEventListener("click", performDriveExport);
+
+  document.getElementById("driveSignOutBtn").addEventListener("click", function () {
+    driveSignOut();
+    var driveStatus = document.getElementById("driveStatus");
+    driveStatus.textContent = "Google 드라이브 로그아웃했어요.";
+    driveStatus.className = "save-status";
+  });
+
+  document.getElementById("importBtn").addEventListener("click", function () {
+    document.getElementById("importFile").click();
+  });
+
+  document.getElementById("importFile").addEventListener("change", function () {
+    var file = this.files && this.files[0];
+    this.value = "";
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var ioStatus = document.getElementById("ioStatus");
+      try {
+        var list = JSON.parse(reader.result);
+        var counts = mergeImport(list);
+        if (!counts) {
+          ioStatus.textContent = "올바른 내보내기 파일이 아니에요.";
+          ioStatus.className = "save-status error";
+          return;
+        }
+        ioStatus.textContent = "가져오기 완료: 새 기록 " + counts.added + "건, 업데이트 " + counts.updated + "건";
+        ioStatus.className = "save-status ok";
+      } catch (e) {
+        ioStatus.textContent = "파일을 읽을 수 없어요. JSON 형식인지 확인해주세요.";
+        ioStatus.className = "save-status error";
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById("importTextBtn").addEventListener("click", function () {
+    var ioStatus = document.getElementById("ioStatus");
+    var raw = document.getElementById("importText").value.trim();
+    if (!raw) {
+      ioStatus.textContent = "붙여넣은 내용이 없습니다.";
+      ioStatus.className = "save-status error";
+      return;
+    }
+    try {
+      var list = JSON.parse(raw);
+      var counts = mergeImport(list);
+      if (!counts) {
+        ioStatus.textContent = "올바른 내보내기 형식이 아니에요.";
+        ioStatus.className = "save-status error";
+        return;
+      }
+      ioStatus.textContent = "가져오기 완료: 새 기록 " + counts.added + "건, 업데이트 " + counts.updated + "건";
+      ioStatus.className = "save-status ok";
+      document.getElementById("importText").value = "";
+    } catch (e) {
+      ioStatus.textContent = "텍스트를 읽을 수 없어요. JSON 형식인지 확인해주세요.";
+      ioStatus.className = "save-status error";
+    }
+  });
+
+  function groupBy(keyFn) {
+    var map = {};
+    var order = [];
+    entries.forEach(function (e) {
+      var k = keyFn(e.date);
+      if (!map[k]) { map[k] = { key: k, count: 0, revenue: 0, fuel: 0 }; order.push(k); }
+      map[k].count += 1;
+      map[k].revenue += e.revenue;
+      map[k].fuel += e.fuel;
+    });
+    order.sort().reverse();
+    return order.map(function (k) { return map[k]; });
+  }
+
+  function renderDaily() {
+    var body = document.getElementById("dailyBody");
+    var empty = document.getElementById("dailyEmpty");
+    var rows = groupBy(function (d) { return d; });
+    if (rows.length === 0) { body.innerHTML = ""; empty.hidden = false; return; }
+    empty.hidden = true;
+    body.innerHTML = rows.map(function (r) {
+      var net = r.revenue - r.fuel;
+      return '<tr>' +
+        '<td class="clickable-date" data-date="' + r.key + '">' + fmtDate(r.key) + '</td>' +
+        '<td class="num">' + r.count + '</td>' +
+        '<td class="num">' + won(r.revenue) + '</td>' +
+        '<td class="num">' + won(r.fuel) + '</td>' +
+        '<td class="num' + (net < 0 ? ' negative-text' : '') + '">' + won(net) + '</td>' +
+        '</tr>';
+    }).join("");
+  }
+
+  function renderMonthly() {
+    var body = document.getElementById("monthlyBody");
+    var empty = document.getElementById("monthlyEmpty");
+    var rows = groupBy(monthOf);
+    if (rows.length === 0) { body.innerHTML = ""; empty.hidden = false; return; }
+    empty.hidden = true;
+    body.innerHTML = rows.map(function (r) {
+      var net = r.revenue - r.fuel;
+      return '<tr>' +
+        '<td class="clickable-date" data-month="' + r.key + '">' + fmtMonth(r.key) + '</td>' +
+        '<td class="num">' + r.count + '</td>' +
+        '<td class="num">' + won(r.revenue) + '</td>' +
+        '<td class="num">' + won(r.fuel) + '</td>' +
+        '<td class="num' + (net < 0 ? ' negative-text' : '') + '">' + won(net) + '</td>' +
+        '</tr>';
+    }).join("");
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function copyRouteToClipboard() {
+    // 출발지 입력칸은 없앴어요 — 오더 문자에서 인식된 값이 있으면 그걸 쓰고,
+    // 없으면 운행 기록 칸에 이미 입력된 상차지를 그대로 씁니다(대부분 고정이라).
+    var from = (document.getElementById("qFrom").value || document.getElementById("fPickup").value || "").trim();
+    var to = document.getElementById("qTo").value.trim();
+    var text = from && to ? (from + " → " + to) : (from || to);
+    var hint = document.getElementById("copyHint");
+    if (!text) { hint.hidden = true; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        document.getElementById("copyHintText").textContent = text;
+        hint.hidden = false;
+      }).catch(function () { hint.hidden = true; });
+    } else {
+      hint.hidden = true;
+    }
+  }
+
+  document.getElementById("openForwarderLink").addEventListener("click", function () {
+    copyRouteToClipboard();
+  });
+
+  function updateCopyRouteHint() {
+    var el = document.getElementById("copyRouteHint");
+    if (el) el.hidden = !document.getElementById("qTo").value.trim();
+  }
+  document.getElementById("qTo").addEventListener("input", updateCopyRouteHint);
+  document.getElementById("copyRouteHint").addEventListener("click", copyRouteToClipboard);
+
+  function fillEntryFromLookup(scroll) {
+    var from = document.getElementById("qFrom").value.trim();
+    var to = document.getElementById("qTo").value.trim();
+    var dropoff = document.getElementById("qDropoff").value.trim();
+    var client = document.getElementById("qClient").value.trim();
+    var containerNo = document.getElementById("qContainer").value.trim();
+    var fee = document.getElementById("qFee").value;
+
+    if (from) document.getElementById("fPickup").value = from;
+    if (to) document.getElementById("fDest").value = to;
+    if (dropoff) document.getElementById("fDropoff").value = dropoff;
+    if (client) document.getElementById("fClient").value = client;
+    if (containerNo) document.getElementById("fContainer").value = containerNo;
+    if (fee) document.getElementById("fRevenue").value = fee;
+
+    if (scroll !== false) {
+      var formCard = document.getElementById("entryForm").closest(".card");
+      var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (formCard) formCard.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    }
+  }
+
+  document.getElementById("fillFromLookup").addEventListener("click", function () {
+    fillEntryFromLookup(true);
+  });
+
+  // --- 오더 문자 자동 인식 -------------------------------------------------
+  // Best-effort extraction from freeform dispatch text (KakaoTalk/SMS-style).
+  // 작업지/도착지/행선지 are treated as the same thing (the destination); 하차지
+  // (e.g. empty container return) is captured separately when it's a distinct stop.
+  // 화주 is pulled from an explicit label first, then from two fallback heuristics
+  // (a contact line with a phone number, or a common company-name suffix) since
+  // dispatch texts rarely label it explicitly — still a guess, so it's flagged as
+  // 확인 in the preview rather than treated as certain.
+  function stripTrailingTimeInfo(s) {
+    var m = s.match(/(오전|오후)?\s*\d{1,2}\s*시/);
+    if (m && m.index > 0) s = s.slice(0, m.index);
+    return s.replace(/[\/\s]+$/, "").trim();
+  }
+
+  function grabDispatchLabel(text, labels) {
+    for (var i = 0; i < labels.length; i++) {
+      var re = new RegExp(labels[i] + "\\s*[:：]\\s*(.+)");
+      var m = text.match(re);
+      if (m && m[1].trim()) return m[1].trim();
+    }
+    return null;
+  }
+
+  // Company name detection, most-precise signal first:
+  // 1) "OOO(주)" / "OOO㈜" / "㈜OOO" — an explicit corporate marker attached to a name
+  // 2) a contact line with a phone number — take the segment before the first "/" or "//"
+  // 3) a common industry-name suffix (산업/기업/물류/...) found anywhere in the text
+  function guessDispatchClient(text) {
+    var m1 = text.match(/([가-힣A-Za-z0-9]{2,12})\s*(?:\(주\)|㈜)/);
+    if (m1) return m1[1];
+    var m2 = text.match(/(?:\(주\)|㈜)\s*([가-힣A-Za-z0-9]{2,12})/);
+    if (m2) return m2[1];
+
+    var lines = text.split("\n");
+    for (var i = 0; i < lines.length; i++) {
+      if (/01[016789]-?\d{3,4}-?\d{4}/.test(lines[i])) {
+        var seg = lines[i].split(/\/{1,2}/)[0].trim().replace(/^[-•\s]+/, "");
+        if (seg && seg.length <= 20) return seg;
+      }
+    }
+    var m3 = text.match(/[가-힣A-Za-z0-9]{1,12}(기업|산업|주식회사|공업|물류|건설|기계|상사|통상|무역|포장|냉장|중공업|해운)/);
+    return m3 ? m3[0] : null;
+  }
+
+  // A destination given as a company/building name (from 작업지 etc.) is often less useful
+  // for actually driving there than a real street address mentioned elsewhere in the text —
+  // when one is present, prefer it for 도착지.
+  //
+  // We find where the address starts (a province/city name), then walk word-by-word through
+  // that line until we hit a standalone number token — that's the building/lot number ending
+  // the address. We do NOT just stop at the first digit found, because Korean road names can
+  // have a number baked into the name itself (e.g. "중앙대로1048번길" contains "1048" but that's
+  // not the building number — the real one, "59", comes right after as its own token).
+  var DISPATCH_PROVINCE_RE = /(?:서울특별시|부산광역시|인천광역시|대구광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|경기도|강원도|제주특별자치도|경상남도|경상북도|전라남도|전라북도|충청남도|충청북도|서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/;
+
+  function findDispatchAddress(text) {
+    var startMatch = text.match(DISPATCH_PROVINCE_RE);
+    if (!startMatch) return null;
+    var startIdx = startMatch.index;
+    var lineEnd = text.indexOf("\n", startIdx);
+    var line = lineEnd === -1 ? text.slice(startIdx) : text.slice(startIdx, lineEnd);
+    var tokens = line.split(/\s+/).filter(Boolean);
+    var picked = [];
+    for (var i = 0; i < tokens.length && i < 14; i++) {
+      var tok = tokens[i];
+      picked.push(tok);
+      var cleaned = tok.replace(/^[(]+/, "").replace(/[),.]+$/, "");
+      if (/^\d+(?:-\d+)?$/.test(cleaned)) {
+        return picked.join(" ");
+      }
+    }
+    // no standalone building/lot number found on that line — don't guess a truncated address
+    return null;
+  }
+
+  function parseDispatchText(text) {
+    var result = { date: null, pickup: null, dest: null, dropoff: null, client: null, clientGuessed: false, containerNo: null, times: [] };
+
+    var dateMatch = text.match(/(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*(?:\(\s*[월화수목금토일]\s*\))?/);
+    if (dateMatch) {
+      var mm = Number(dateMatch[1]);
+      var dd = Number(dateMatch[2]);
+      if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+        var now = new Date();
+        var year = now.getFullYear();
+        var candidate = new Date(year, mm - 1, dd);
+        var diffDays = (candidate - now) / 86400000;
+        // a date that's already well in the past is more likely next year's (e.g. pasted in late Dec for a Jan run)
+        if (diffDays < -200) year += 1;
+        result.date = year + "-" + String(mm).padStart(2, "0") + "-" + String(dd).padStart(2, "0");
+      }
+    }
+
+    result.pickup = grabDispatchLabel(text, ["상차지"]);
+    result.dest = grabDispatchLabel(text, ["작업지", "도착지", "행선지"]);
+    result.dropoff = grabDispatchLabel(text, ["하차지"]);
+    if (!result.dest && result.dropoff) {
+      // no separate work-location label — 하차지 alone is effectively the destination
+      result.dest = result.dropoff;
+      result.dropoff = null;
+    }
+
+    if (result.pickup) result.pickup = stripTrailingTimeInfo(result.pickup);
+    if (result.dest) result.dest = stripTrailingTimeInfo(result.dest);
+    if (result.dropoff) result.dropoff = stripTrailingTimeInfo(result.dropoff);
+
+    var address = findDispatchAddress(text);
+    if (address) result.dest = address;
+
+    result.client = grabDispatchLabel(text, ["화주", "거래처명", "거래처"]);
+    if (!result.client) {
+      result.client = guessDispatchClient(text);
+      if (result.client) result.clientGuessed = true;
+    }
+
+    var containerRaw = grabDispatchLabel(text, ["컨\\s*넘버", "컨테이너\\s*번호", "컨테이너\\s*No\\.?", "container\\s*no\\.?"]);
+    if (containerRaw) {
+      var cm = containerRaw.match(/[A-Za-z]{4}\s?\d{6,7}/);
+      result.containerNo = cm ? cm[0].replace(/\s+/g, "").toUpperCase() : containerRaw;
+    }
+    if (!result.containerNo) {
+      // "컨넘버 :" 같은 라벨 없이 문장 맨 앞에 그냥 적혀 있는 경우도 있음
+      // (예: "UETU7048780 / 40풀 / 24.9톤"). 4자리 알파벳 + 6~7자리 숫자 형태(ISO 6346 컨테이너 번호
+      // 규격)를 문장 전체에서 찾아서 보완. 씰넘버(FJ27327126 등)는 알파벳이 2자리라 여기 걸리지 않음.
+      var bareMatch = text.match(/\b[A-Za-z]{4}\s?\d{6,7}\b/);
+      if (bareMatch) result.containerNo = bareMatch[0].replace(/\s+/g, "").toUpperCase();
+    }
+
+    var timeMatches = text.match(/(오전|오후)?\s*\d{1,2}시\s*(?:\d{1,2}분)?\s*(?:착|도착|까지)/g);
+    if (timeMatches) {
+      result.times = timeMatches.map(function (t) { return t.replace(/\s+/g, ""); });
+    }
+
+    return result;
+  }
+
+  function dispatchPreviewRow(label, value, placeholder) {
+    var has = value !== null && value !== undefined && value !== "";
+    return '<div class="dispatch-preview-row"><span class="label">' + escapeHtml(label) + '</span>' +
+      '<span class="value' + (has ? "" : " missing") + '">' + escapeHtml(has ? value : placeholder) + '</span></div>';
+  }
+
+  document.getElementById("parseDispatchBtn").addEventListener("click", function () {
+    var preview = document.getElementById("dispatchPreview");
+    var text = document.getElementById("dispatchText").value.trim();
+    if (!text) {
+      preview.hidden = false;
+      preview.innerHTML = '<div class="dispatch-preview-row"><span class="value missing">붙여넣은 오더 내용이 없습니다.</span></div>';
+      return;
+    }
+
+    var r = parseDispatchText(text);
+
+    // 오늘 운행 기록 추가 칸에 바로 채우기
+    if (r.date) document.getElementById("fDate").value = r.date;
+    if (r.pickup) document.getElementById("fPickup").value = r.pickup;
+    if (r.dest) document.getElementById("fDest").value = r.dest;
+    if (r.dropoff) document.getElementById("fDropoff").value = r.dropoff;
+    if (r.client) document.getElementById("fClient").value = r.client;
+    if (r.containerNo) document.getElementById("fContainer").value = r.containerNo;
+
+    // 출발지·도착지만 계산기 카드에도 남겨서 "계산기 열기"의 자동 복사가 계속 되게 함
+    if (r.pickup) document.getElementById("qFrom").value = r.pickup;
+    if (r.dest) document.getElementById("qTo").value = r.dest;
+    updateCopyRouteHint();
+
+    var html = "";
+    html += dispatchPreviewRow("날짜", r.date, "인식 안 됨 — 직접 선택해주세요");
+    html += dispatchPreviewRow("상차지", r.pickup, "인식 안 됨");
+    html += dispatchPreviewRow("도착지", r.dest, "인식 안 됨");
+    html += dispatchPreviewRow("하차지", r.dropoff, "해당 없음");
+    html += dispatchPreviewRow("화주" + (r.clientGuessed ? " (추정 — 확인해주세요)" : ""), r.client, "인식 안 됨 — 직접 입력해주세요");
+    html += dispatchPreviewRow("컨넘버", r.containerNo, "인식 안 됨");
+    if (r.times.length) {
+      html += '<div class="dispatch-preview-note">문자에서 시간 표시를 찾았어요: ' + escapeHtml(r.times.join(", ")) +
+        ' — 어느 지점 기준인지 확인해서 필요하면 메모해두세요.</div>';
+    }
+    preview.hidden = false;
+    preview.innerHTML = html;
+
+    var formCard = document.getElementById("entryForm").closest(".card");
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (formCard) formCard.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  });
+
+  document.getElementById("entryForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var date = document.getElementById("fDate").value || todayStr();
+    var containerNo = document.getElementById("fContainer").value.trim().toUpperCase();
+    var pickup = document.getElementById("fPickup").value.trim();
+    var dest = document.getElementById("fDest").value.trim();
+    var dropoff = document.getElementById("fDropoff").value.trim();
+    var client = document.getElementById("fClient").value.trim();
+    var revenue = Number(document.getElementById("fRevenue").value) || 0;
+    var distance = Number(document.getElementById("fDistance").value) || 0;
+    var fuel = Number(document.getElementById("fFuel").value) || 0;
+
+    if (!pickup || !dest || revenue <= 0) {
+      setStatus("상차지, 행선지, 매출을 입력해주세요.", "error");
+      return;
+    }
+
+    if (editingId) {
+      var target = entries.find(function (x) { return x.id === editingId; });
+      if (target) {
+        target.date = date;
+        target.containerNo = containerNo;
+        target.pickup = pickup;
+        target.dest = dest;
+        target.dropoff = dropoff;
+        target.client = client;
+        target.revenue = revenue;
+        target.distance = distance;
+        target.fuel = fuel;
+      }
+      editingId = null;
+      document.getElementById("editBanner").hidden = true;
+      document.getElementById("formTitle").textContent = "오늘 운행 기록 추가";
+      document.getElementById("entrySubmitBtn").textContent = "기록 추가";
+    } else {
+      entries.push({
+        id: uid(),
+        date: date,
+        status: "pending",
+        containerNo: containerNo,
+        pickup: pickup,
+        dest: dest,
+        dropoff: dropoff,
+        client: client,
+        revenue: revenue,
+        distance: distance,
+        fuel: fuel,
+        createdAt: Date.now()
+      });
+    }
+
+    backupLocally();
+    render();
+    this.reset();
+    document.getElementById("fDate").value = date;
+
+    document.getElementById("qFrom").value = "";
+    document.getElementById("qTo").value = "";
+    document.getElementById("qDropoff").value = "";
+    document.getElementById("qClient").value = "";
+    document.getElementById("qContainer").value = "";
+    document.getElementById("qFee").value = "";
+    document.getElementById("copyHint").hidden = true;
+    updateCopyRouteHint();
+
+    document.getElementById("dispatchText").value = "";
+    document.getElementById("dispatchPreview").hidden = true;
+    document.getElementById("dispatchPreview").innerHTML = "";
+
+    setStatus("저장 중…");
+    persist();
+    autoDriveSync();
+  });
+
+  document.getElementById("entryBody").addEventListener("click", function (ev) {
+    var editBtn = ev.target.closest(".edit-btn");
+    if (editBtn) {
+      startEdit(editBtn.getAttribute("data-id"));
+      return;
+    }
+    var delBtn = ev.target.closest(".del-btn");
+    if (delBtn) {
+      var id = delBtn.getAttribute("data-id");
+      entries = entries.filter(function (e) { return e.id !== id; });
+      addDeletedId(id);
+      if (editingId === id) cancelEdit();
+      backupLocally();
+      render();
+      setStatus("저장 중…");
+      persist();
+      autoDriveSync();
+      return;
+    }
+    var statusBtn = ev.target.closest(".status-pill");
+    if (statusBtn) {
+      var sid = statusBtn.getAttribute("data-id");
+      var entry = entries.find(function (e) { return e.id === sid; });
+      if (entry) {
+        entry.status = STATUS_ORDER[statusOf(entry)];
+        backupLocally();
+        renderEntries();
+        setStatus("저장 중…");
+        persist();
+        autoDriveSync();
+      }
+      return;
+    }
+    var dateCell = ev.target.closest(".clickable-date");
+    if (dateCell) {
+      selectDate(dateCell.getAttribute("data-date"));
+    }
+  });
+
+  document.getElementById("dailyBody").addEventListener("click", function (ev) {
+    var dateCell = ev.target.closest(".clickable-date");
+    if (dateCell) {
+      selectDate(dateCell.getAttribute("data-date"));
+    }
+  });
+
+  document.getElementById("dateChipRow").addEventListener("click", function (ev) {
+    if (ev.target.closest("#clearDateFilterBtn")) {
+      clearDateFilter();
+    }
+  });
+
+  document.getElementById("monthlyBody").addEventListener("click", function (ev) {
+    var cell = ev.target.closest("[data-month]");
+    if (cell) selectMonth(cell.getAttribute("data-month"));
+  });
+
+  document.getElementById("monthChipGrid").addEventListener("click", function (ev) {
+    var chip = ev.target.closest(".month-chip");
+    if (chip) selectMonth(chip.getAttribute("data-month"));
+  });
+
+  document.getElementById("monthYearPrev").addEventListener("click", function () {
+    if (monthChipYear === null) monthChipYear = Number(todayStr().slice(0, 4));
+    monthChipYear -= 1;
+    renderMonthChips();
+  });
+
+  document.getElementById("monthYearNext").addEventListener("click", function () {
+    if (monthChipYear === null) monthChipYear = Number(todayStr().slice(0, 4));
+    monthChipYear += 1;
+    renderMonthChips();
+  });
+
+  function runSearch() {
+    if (activeDateFilter) activeDateFilter = null;
+    if (activeMonthFilter) { activeMonthFilter = null; renderMonthChips(); }
+    renderEntries();
+  }
+  document.getElementById("searchContainer").addEventListener("input", runSearch);
+  document.getElementById("searchContainer").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") { ev.preventDefault(); runSearch(); document.getElementById("searchContainer").blur(); }
+  });
+  document.getElementById("searchBtn").addEventListener("click", runSearch);
+
+  ["range30", "range60", "range90"].forEach(function (id) {
+    var cb = document.getElementById(id);
+    cb.addEventListener("change", function () {
+      if (this.checked) {
+        activeDateFilter = null;
+        if (activeMonthFilter) { activeMonthFilter = null; renderMonthChips(); }
+        activeRangeDays = Number(this.value);
+        ["range30", "range60", "range90"].forEach(function (otherId) {
+          if (otherId !== id) document.getElementById(otherId).checked = false;
+        });
+      } else {
+        activeRangeDays = null;
+      }
+      renderEntries();
+    });
+  });
+
+  async function loadEntries() {
+    // 자체 호스팅 버전에서는 서버 저장소가 따로 없어요 — 이 기기의 localStorage가
+    // 1차 저장소이고, Google 드라이브 자동 동기화(autoDriveSync)가 기기 간 백업을 맡습니다.
+    var localBackup = readLocalBackup();
+    entries = localBackup || [];
+  }
+
+  document.getElementById("refreshBtn").addEventListener("click", async function () {
+    var btn = this;
+    btn.disabled = true;
+    await loadEntries();
+    render();
+    autoDriveSync();
+    btn.disabled = false;
+  });
+
+  async function init() {
+    document.getElementById("fDate").value = todayStr();
+    await loadEntries();
+    loaded = true;
+    render();
+    autoDriveSync();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
