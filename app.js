@@ -20,6 +20,7 @@ let saveTimer = null;
 let isSaving = false;
 let pendingReviewData = null; // {date, store, items:[{name, amount, category}]}
 let editingTxId = null;
+let selectedMonthKey = null; // "YYYY-MM" | null(전체보기) — 지출 내역을 월별로 나눠 보기 위한 선택 상태
 
 // ------------------- 유틸 -------------------
 
@@ -102,6 +103,7 @@ function populateCategorySelect(sel, selected) {
 }
 
 function renderAll() {
+  renderMonthTabs();
   renderSummary();
   renderTxList();
   renderInbox();
@@ -111,11 +113,51 @@ function currentMonthKey() {
   return todayStr().slice(0, 7); // YYYY-MM
 }
 
+// 데이터에 실제로 존재하는 월(YYYY-MM) 목록을 최신순으로 반환 (이번 달은 데이터가 없어도 항상 포함)
+function getAvailableMonthKeys() {
+  const keys = new Set(state.transactions.map((t) => t.date && t.date.slice(0, 7)).filter(Boolean));
+  keys.add(currentMonthKey());
+  return [...keys].sort().reverse();
+}
+
+function renderMonthTabs() {
+  const wrap = document.getElementById("monthTabs");
+  if (!wrap) return;
+  const keys = getAvailableMonthKeys();
+  wrap.innerHTML = "";
+
+  const allBtn = document.createElement("button");
+  allBtn.type = "button";
+  allBtn.className = "month-tab" + (selectedMonthKey === null ? " active" : "");
+  allBtn.textContent = "전체";
+  allBtn.addEventListener("click", () => {
+    selectedMonthKey = null;
+    renderAll();
+  });
+  wrap.appendChild(allBtn);
+
+  keys.forEach((mk) => {
+    const [y, m] = mk.split("-");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "month-tab" + (selectedMonthKey === mk ? " active" : "");
+    btn.textContent = `${y}.${m}`;
+    btn.addEventListener("click", () => {
+      selectedMonthKey = mk;
+      renderAll();
+    });
+    wrap.appendChild(btn);
+  });
+
+  const activeEl = wrap.querySelector(".month-tab.active");
+  if (activeEl) activeEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+}
+
 function renderSummary() {
-  const mk = currentMonthKey();
-  const monthTx = state.transactions.filter((t) => t.date && t.date.slice(0, 7) === mk);
+  const mk = selectedMonthKey;
+  const monthTx = mk ? state.transactions.filter((t) => t.date && t.date.slice(0, 7) === mk) : state.transactions;
   const total = monthTx.reduce((s, t) => s + Number(t.amount || 0), 0);
-  document.getElementById("summaryMonthLabel").textContent = `${Number(mk.slice(5, 7))}월 지출`;
+  document.getElementById("summaryMonthLabel").textContent = mk ? `${Number(mk.slice(5, 7))}월 지출` : "전체 지출";
   document.getElementById("summaryTotal").textContent = formatWon(total);
 
   const byCat = {};
@@ -142,13 +184,19 @@ function renderTxList() {
   const list = document.getElementById("txList");
   const empty = document.getElementById("emptyState");
   list.innerHTML = "";
-  if (!state.transactions.length) {
+  const source = selectedMonthKey
+    ? state.transactions.filter((t) => t.date && t.date.slice(0, 7) === selectedMonthKey)
+    : state.transactions;
+  if (!source.length) {
+    empty.textContent = selectedMonthKey
+      ? "이 달에는 등록된 지출이 없어요."
+      : "아직 등록된 지출이 없어요. 영수증을 찍거나 직접 입력해 보세요.";
     empty.classList.remove("hidden");
     return;
   }
   empty.classList.add("hidden");
 
-  const sorted = [...state.transactions].sort((a, b) => {
+  const sorted = [...source].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
@@ -1334,6 +1382,7 @@ function setupUnloadSave() {
 
 function init() {
   loadLocal();
+  selectedMonthKey = currentMonthKey(); // 기본값: 이번 달만 보기 (전체를 보려면 "전체" 탭)
   renderAll();
   setupUnloadSave();
 

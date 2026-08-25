@@ -214,6 +214,30 @@ main {
   cursor: pointer;
 }
 
+.month-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.month-tabs::-webkit-scrollbar { display: none; }
+.month-tab {
+  flex-shrink: 0;
+  background: #f6f5f0;
+  color: var(--ink-soft);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.month-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
 .tx-list { display: flex; flex-direction: column; gap: 10px; }
 .tx-day-group { display: flex; flex-direction: column; gap: 6px; }
 .tx-day-label { font-size: 12px; color: var(--ink-soft); font-weight: 600; margin-top: 6px; }
