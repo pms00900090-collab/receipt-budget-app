@@ -32,6 +32,14 @@
   .icon-btn.on{background:rgba(79,191,139,.15);border-color:rgba(79,191,139,.5);color:#4FBF8B}
   @keyframes spin{to{transform:rotate(360deg)}}
 
+  /* 상단 드라이브 연결/동기화 상태줄 — 열자마자 지금 연결 상태와 방금 무슨 일이 있었는지 한눈에 보이게 */
+  .drivebar{display:flex;align-items:center;gap:7px;padding:7px 16px;font-size:12px;color:var(--mut);border-bottom:1px solid var(--line);transition:color .2s}
+  .drivebar-dot{width:7px;height:7px;border-radius:50%;background:var(--mut);flex:none;transition:background .2s}
+  .drivebar.on{color:#4FBF8B}
+  .drivebar.on .drivebar-dot{background:#4FBF8B}
+  .drivebar.busy .drivebar-dot{animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
   .searchwrap{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 16px 12px;display:flex;align-items:center;gap:8px}
   .search-ic{position:absolute;left:28px;color:var(--mut);font-size:16px;pointer-events:none}
   #search{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 12px 11px 34px;color:var(--tx);font-size:14px;outline:none;width:100%}
@@ -103,7 +111,7 @@
   .tag.v{border-color:var(--vc);color:var(--vc)}
   .rec-sub{font-size:11px;color:var(--mut);font-family:var(--mono)}
   .rec-cost{font-family:var(--mono);font-size:13px;font-weight:600;text-align:right;white-space:nowrap;padding-top:1px}
-  .rec-memo{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5;border-left:2px solid var(--line);padding-left:8px}
+  .rec-memo{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5;border-left:2px solid var(--line);padding-left:8px;white-space:pre-wrap}
 
   .empty{text-align:center;padding:44px 20px;color:var(--mut);font-size:13px;line-height:1.7}
   .empty b{display:block;color:var(--tx);font-size:14px;margin-bottom:6px}
@@ -120,6 +128,9 @@
   .fld>span em{font-style:normal;opacity:.7}
   .fld input,.fld textarea{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--tx);font-size:15px;outline:none}
   .fld input:focus,.fld textarea:focus{border-color:var(--amber)}
+  /* 메모는 자동입력(영수증 파싱)으로 여러 줄이 들어올 수 있어 입력하는 대로/채워지는 대로 자동으로 늘어나게 함 —
+     그래도 너무 길면(약 10줄 이상) 그 이후부턴 칸 안에서만 스크롤되게 최대 높이를 둠 */
+  .fld textarea#f_memo{resize:vertical;min-height:64px;max-height:320px;overflow-y:auto;line-height:1.6}
   .row2{display:flex;gap:10px}
   .row2 .fld{flex:1}
   .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -194,6 +205,11 @@
       <input type="file" id="fileInput" accept=".json" hidden>
     </div>
   </header>
+
+  <div class="drivebar" id="driveBar">
+    <span class="drivebar-dot" id="driveDot"></span>
+    <span id="driveBarText">드라이브 연결 확인 중…</span>
+  </div>
 
   <div class="searchwrap">
     <span class="search-ic">⌕</span>
@@ -309,6 +325,8 @@
   const dday=d=>Math.ceil((new Date(d+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5);
 
   function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,1900);}
+  // 메모 칸을 입력/자동채움 내용 길이에 맞춰 늘려줌(최대 높이는 CSS에서 제한 — 그 이상은 칸 안에서 스크롤)
+  function autoGrowMemo(){ const el=$('#f_memo'); if(!el)return; el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
 
   const stamp=()=>new Date().toISOString();
   const live=()=>recs.filter(r=>!r.del);
@@ -337,14 +355,23 @@
   async function load(){
     try{recs=await pull();}
     catch(e){recs=[];}
-    try{
-      const driveRecs=await pullDriveBackup();
-      if(driveRecs&&driveRecs.length){
+    render(); // 로컬 데이터로 우선 바로 보여주고, 드라이브 연결/동기화는 이어서 백그라운드로 진행
+    renderDriveBar(true);
+    // 이 브라우저에서 예전에 연결한 적 있으면 팝업 없이 조용히 자동 재연결 시도(가계부 앱처럼 열자마자 연결됨 상태로 시작)
+    const connected=await ensureDriveToken(false);
+    updateDriveAuthUI();
+    if(connected){
+      try{
+        const driveRecs=await pullDriveBackup();
         const before=JSON.stringify(recs);
-        recs=merge(recs,driveRecs);
-        if(JSON.stringify(recs)!==before)await store.set(KEY,JSON.stringify(recs));
-      }
-    }catch(e){}
+        if(driveRecs&&driveRecs.length)recs=merge(recs,driveRecs);
+        if(JSON.stringify(recs)!==before){ await store.set(KEY,JSON.stringify(recs)); }
+        driveBarMsg='최신 데이터를 불러왔어요';
+      }catch(e){ driveBarMsg='동기화에 실패했어요 · 로컬 데이터로 표시 중'; }
+    }else{
+      driveBarMsg='';
+    }
+    renderDriveBar();
     try{lastBackupDate=await store.get('maintlog:lastbackup')||'';}catch(e){}
     try{lastBackupTarget=await store.get('maintlog:lastbackuptarget')||'';}catch(e){}
     try{lastBackedUpUp=await store.get('maintlog:lastbackedupup')||'';}catch(e){}
@@ -390,25 +417,60 @@
     });
     return true;
   }
+  /* 로그인 스크립트(gsi/client)는 <script async>라 페이지 로드 직후엔 아직 안 떠 있을 수 있음 — 뜰 때까지 잠깐만 기다림 */
+  function waitDriveClient(timeoutMs){
+    return new Promise(resolve=>{
+      const t0=Date.now();
+      (function tick(){
+        if(initDriveClient()){ resolve(true); return; }
+        if(Date.now()-t0>timeoutMs){ resolve(false); return; }
+        setTimeout(tick,150);
+      })();
+    });
+  }
   function requestDriveToken(interactive){
     return new Promise(resolve=>{
-      if(!initDriveClient()){ toast('구글 로그인 스크립트를 불러오는 중이에요. 잠시 후 다시 눌러주세요'); resolve(false); return; }
+      if(!initDriveClient()){
+        if(interactive)toast('구글 로그인 스크립트를 불러오는 중이에요. 잠시 후 다시 눌러주세요');
+        resolve(false); return;
+      }
       driveResolvers.push(resolve);
-      try{ driveTokenClient.requestAccessToken({prompt:interactive?'':''}); }
+      // interactive(사용자가 직접 누름): 필요하면 로그인 창을 띄움(prompt:'')
+      // 조용히 시도(자동): 팝업 없이 시도만 하고, 안 되면 그냥 조용히 실패함(prompt:'none') — 창이 뜨는 일은 없음
+      try{ driveTokenClient.requestAccessToken({prompt:interactive?'':'none'}); }
       catch(e){ driveResolvers.pop(); resolve(false); }
     });
   }
-  /* 이미 로그인돼 있으면 그대로 쓰고, 아니면 자동(팝업 없이 조용히)으로는 시도하지 않음 — 사용자가 직접 누른 동작에서만 로그인 팝업을 띄움 */
+  /* 이미 로그인돼 있으면 그대로 쓰고, 아니면 interactive=false일 땐 팝업 없이 조용히(prompt:'none')만 시도함 —
+     이 브라우저에서 예전에 한 번이라도 연결한 적이 있고 구글 로그인 세션이 아직 살아있으면, 창 없이 자동으로
+     다시 연결돼서(가계부 앱처럼) 열자마자 "드라이브 연결됨" 상태로 시작함. interactive=true(버튼을 직접 눌렀을
+     때)만 필요하면 로그인 창을 띄움 */
   async function ensureDriveToken(interactive){
     if(driveToken&&Date.now()<driveTokenExp-60000)return true;
-    if(!interactive)return false;
-    return await requestDriveToken(true);
+    if(!interactive){
+      const ready=await waitDriveClient(4000);
+      if(!ready)return false;
+    }
+    return await requestDriveToken(interactive);
   }
   function updateDriveAuthUI(){
     const b=$('#btnDriveAuth');
-    if(!b)return;
-    b.classList.toggle('on',!!driveToken);
-    b.title=driveToken?'구글 드라이브 연결됨':'구글 드라이브 연결';
+    if(b){
+      b.classList.toggle('on',!!driveToken);
+      b.title=driveToken?'구글 드라이브 연결됨':'구글 드라이브 연결';
+    }
+    renderDriveBar();
+  }
+  /* 상단 상태줄: 지금 연결/동기화 상태를 한눈에 보여줌(가계부 앱의 "드라이브 연결됨" 배지·안내문과 같은 역할) */
+  let driveBarMsg='';
+  function renderDriveBar(busy){
+    const bar=$('#driveBar'), txt=$('#driveBarText');
+    if(!bar||!txt)return;
+    bar.classList.toggle('on',!!driveToken);
+    bar.classList.toggle('busy',!!busy);
+    if(busy){ txt.textContent='드라이브 확인 중…'; return; }
+    if(driveToken)txt.textContent='● 드라이브 연결됨'+(driveBarMsg?' · '+driveBarMsg:'');
+    else txt.textContent='드라이브 연결 안 됨 · 🔐 버튼을 눌러 연결하면 기기 간 자동으로 동기화돼요';
   }
   async function driveFetch(url,opts){
     opts=opts||{};
@@ -667,6 +729,7 @@
     formPhoto=r?(r.photo||null):null;
     showPhotoPreview();
     $('#sheet').hidden=false;$('#sheetBg').hidden=false;
+    autoGrowMemo(); // 시트가 보여진 뒤에 재야 실제 높이(scrollHeight)를 제대로 잼
   }
   function closeSheet(){$('#sheet').hidden=true;$('#sheetBg').hidden=true;edit=null;}
 
@@ -679,7 +742,8 @@
     const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
     // 한 줄에 금액이 여러 개(표 형식 명세서 등) 있을 수 있어 전부 뽑아서 최댓값을 씀
     // 쉼표(,) 대신 마침표(.)를 천단위 구분자로 잘못 읽는 OCR 오탈자도 같이 받아줌(예: "8.000"→8000)
-    const numsFrom=s=>[...s.matchAll(/(\d{1,3}(?:[,.]\d{3})+|\d{4,})/g)].map(mm=>Number(mm[1].replace(/[,.]/g,'')));
+    // "190, 000"처럼 쉼표 뒤에 공백이 끼어드는 OCR 오탈자도 같이 받아줌
+    const numsFrom=s=>[...s.matchAll(/(\d{1,3}(?:[,.]\s?\d{3})+|\d{4,})/g)].map(mm=>Number(mm[1].replace(/[,.\s]/g,'')));
 
     const dm=text.match(/(\d{4})\s*[.\-\/년]\s*(\d{1,2})\s*[.\-\/월]\s*(\d{1,2})\s*일?/);
     if(dm)res.date=dm[1]+'-'+pad(+dm[2])+'-'+pad(+dm[3]);
@@ -716,42 +780,89 @@
     }
     // 방법 3: "숫자원" 형태 중 최댓값
     if(!total){
-      const all=[...text.matchAll(/(\d{1,3}(?:[,.]\d{3})+|\d{4,})\s*원/g)].map(mm=>Number(mm[1].replace(/[,.]/g,'')));
+      const all=[...text.matchAll(/(\d{1,3}(?:[,.]\s?\d{3})+|\d{4,})\s*원/g)].map(mm=>Number(mm[1].replace(/[,.\s]/g,'')));
       if(all.length)total=Math.max(...all);
     }
     if(total)res.cost=String(total);
     if(vat)res.memo='부가세 '+won(vat)+' 포함';
 
+    const itemKeywords=/오일|타이어|점검|교체|교환|수리|검사|배터리|필터|브레이크|세차|정비\s/;
+    // 표 제목/서식 번호(대괄호로 감싼 줄)나 "점검/정비의뢰일자" 같은 항목 이름줄은 실제 정비 내용이 아니므로 제외
+    // "정비업자가 점검·정비를 잘못하여 다음 각 호의 기간중 발생하는 고장 등에 대하여는..." 같은 정비 관련 법정 고지문/보증안내문도
+    // 실제 정비 내용이 아니므로 제외(정비업자/각 호/무상수리/고장 등 표현이 있으면 고지문으로 판단)
+    const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업내용|비\s*고|의뢰일자|완료일|^\[.*\]$|정비업자|각\s*호|무상.{0,6}정비|고장\s*등|보증\s*기간|「|제\s*\d+\s*조/;
+    // "조수석앞"/"운전석뒤"처럼 위치만 적힌 줄은 표 칸이 나뉘어 OCR되면서 정작 항목명(다음 줄)과 떨어지는 경우가 많음 —
+    // 이런 위치줄은 대기시켰다가 뒤이어 나오는 항목줄 앞에 붙여줌(먼저 나온 위치가 먼저 나오는 항목에 붙음)
+    const posMarker=/^(조수석|운전석|뒷좌석|앞좌석|좌측|우측)\s*(앞|뒤)?$|^(앞|뒤|좌|우)$/;
+
     // 상호/업체명: "(주)OOO" / "㈜OOO" 형태가 있으면 그게 가장 확실한 업체명
-    const bizm=text.match(/((?:\(주\)|㈜)[^\s,\n]{1,20})/);
-    if(bizm)res.shop=bizm[1].trim();
+    // OCR이 상호 중간에 공백을 잘못 끼워넣는 경우(예: "에이원모터스"→"에 이원모터스")가 있어 줄바꿈/쉼표까지는 허용
+    const bizm=text.match(/((?:\(주\)|㈜)[^\n,]{1,20})/);
+    if(bizm)res.shop=bizm[1].trim().replace(/\s+/g,' ');
     if(!res.shop){
       for(const line of lines.slice(0,6)){
-        if(/^[\d.\-\/:\s]+$/.test(line))continue;
+        if(/^[\d,.\-\/:\s]+$/.test(line))continue;
         if(/^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(line))continue;
         if(totalLabel.test(line)||vatLabel.test(line))continue;
+        // 정비 항목줄/위치줄/표 헤더줄은 업체명일 리 없으므로 후보에서 제외
+        if(itemKeywords.test(line)||posMarker.test(line)||headerNoise.test(line))continue;
         if(line.length<2)continue;
         res.shop=line; break;
       }
     }
-    const itemKeywords=/오일|타이어|점검|교체|교환|수리|검사|배터리|필터|브레이크|세차|정비\s/;
-    // 표 제목/서식 번호(대괄호로 감싼 줄)나 "점검/정비의뢰일자" 같은 항목 이름줄은 실제 정비 내용이 아니므로 제외
-    const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업내용|비\s*고|의뢰일자|완료일|^\[.*\]$/;
-    // 품목이 여러 줄이면(부품 여러 개 교환 등) 전부 모아서 나열함 — 금액을 품목별로 쪼개 배정하진 않음(표 순서가 OCR로
-    // 뒤섞이는 경우가 많아 잘못 배정할 위험이 큼). 합계는 위에서 구한 정확한 전체 합계 하나를 그대로 씀.
-    const itemLines=lines
-      .filter(l=>l!==res.shop&&itemKeywords.test(l)&&!totalLabel.test(l)&&!vatLabel.test(l)&&!headerNoise.test(l))
-      .map(l=>{
+    const pendingPos=[];
+    const mergedLines=lines.reduce((acc,l)=>{
+      if(l!==res.shop&&posMarker.test(l)){ pendingPos.push(l); return acc; }
+      if(l!==res.shop&&itemKeywords.test(l)&&!totalLabel.test(l)&&!vatLabel.test(l)&&!headerNoise.test(l)&&pendingPos.length){
+        acc.push(pendingPos.shift()+' '+l); return acc;
+      }
+      acc.push(l); return acc;
+    },[]);
+    // 품목 후보를 원본(mergedLines) 위치(idx)와 같이 들고 있다가, 합계/부가세 등으로 흡수되지 않은 "가까운 금액"을
+    // 항목별로 붙여줌(품목이 2개 이상—표 형식일 때만; 단일 품목 영수증은 총액 하나로 충분하므로 건드리지 않음)
+    const itemCand=mergedLines
+      .map((l,idx)=>({idx,l}))
+      .filter(o=>o.l!==res.shop&&itemKeywords.test(o.l)&&!totalLabel.test(o.l)&&!vatLabel.test(o.l)&&!headerNoise.test(o.l))
+      .map(o=>{
         // 표 형식 명세서면 항목명 뒤에 구분/수량/단가 등 숫자열이 붙어 나오기도 함 — 그 앞까지만 항목명으로 씀
-        const cut=l.search(/\s(?:[A-Z]\s|\d)/);
-        return (cut>0?l.slice(0,cut):l).trim();
+        const cut=o.l.search(/\s(?:[A-Z]\s|\d)/);
+        return {idx:o.idx, text:(cut>0?o.l.slice(0,cut):o.l).trim()};
       })
-      .filter((l,i,arr)=>l&&arr.indexOf(l)===i); // 중복 제거
+      .filter(o=>o.text);
+    const seenText=new Set();
+    const dedup1=itemCand.filter(o=>{ if(seenText.has(o.text))return false; seenText.add(o.text); return true; });
+    // 같은 항목이 표 칸별로 조각나 또 나오면(예: "탑쇼바"+"교환 유로6"가 이미 합쳐진 "탑쇼바 교환 유로6"와 따로 나옴)
+    // 더 완전한(긴) 줄에 포함되는 조각은 빼서 중복 표시를 막음
+    const finalItems=dedup1.filter((o,i,arr)=>!arr.some((p,j)=>j!==i&&p.text.length>o.text.length&&p.text.includes(o.text)));
+    const itemLines=finalItems.map(o=>o.text);
     if(itemLines.length){
       const MAXSHOW=3;
+      // 항목이 2개 이상이면 "1.항목, 2.항목" 처럼 번호를 매겨 구분이 되게 함
+      const numbered=itemLines.length>1?itemLines.map((l,i)=>(i+1)+'.'+l):itemLines;
       res.title=itemLines.length<=MAXSHOW
-        ? itemLines.join(', ')
-        : itemLines.slice(0,MAXSHOW).join(', ')+' 외 '+(itemLines.length-MAXSHOW)+'건';
+        ? numbered.join(', ')
+        : numbered.slice(0,MAXSHOW).join(', ')+' 외 '+(itemLines.length-MAXSHOW)+'건';
+    }
+    // 항목별 금액: 그 항목 다음 줄부터 다음 항목(또는 합계/부가세 구간) 전까지 나오는 숫자를 "이 항목 근처 금액"으로
+    // 메모에 같이 적어줌 — 나중에 "이 부품이 그때 얼마였는지" 검색해서 바로 알 수 있게
+    if(finalItems.length>=2){
+      const priceLines=[];
+      finalItems.forEach((o,k)=>{
+        const nextIdx=k+1<finalItems.length?finalItems[k+1].idx:mergedLines.length;
+        let windowEnd=nextIdx;
+        for(let j=o.idx+1;j<nextIdx;j++){
+          if(totalLabel.test(mergedLines[j])||vatLabel.test(mergedLines[j])){ windowEnd=j; break; }
+        }
+        const windowNums=[];
+        for(let j=o.idx+1;j<windowEnd;j++){
+          numsFrom(mergedLines[j]).filter(n=>n>=1000).forEach(n=>{ if(!windowNums.includes(n))windowNums.push(n); });
+        }
+        if(windowNums.length)priceLines.push((k+1)+'. '+o.text+' — '+windowNums.slice(0,2).map(won).join(' / '));
+      });
+      if(priceLines.length){
+        const extra=priceLines.join('\n');
+        res.memo=res.memo?res.memo+'\n'+extra:extra;
+      }
     }
 
     if(/타이어/.test(text))res.type='타이어';
@@ -775,12 +886,14 @@
     if(r.memo){
       const cur=$('#f_memo').value.trim();
       $('#f_memo').value=cur?cur+'\n'+r.memo:r.memo;
+      autoGrowMemo();
     }
     toast(hit?'텍스트에서 채웠어요 · 확인하고 저장해 주세요':'인식되는 정보를 못 찾았어요 · 직접 입력해 주세요');
   }
   $('#pasteText').addEventListener('paste',()=>{ setTimeout(()=>applyPasteText(true),30); });
   $('#pasteClear').onclick=()=>{ $('#pasteText').value=''; };
   $('#pasteApply').onclick=()=>applyPasteText(false);
+  $('#f_memo').addEventListener('input',autoGrowMemo);
 
   /* ── 영수증 사진 자동 인식(Tesseract.js OCR) + 원본 보관 ── */
   function showPhotoPreview(){
