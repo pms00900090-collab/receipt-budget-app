@@ -595,6 +595,7 @@
 
   /* ── 홈: 차량 배너 ── */
   function home(){
+    search.placeholder='정비내역·검사·정비소·연도 검색 (예: 검사, 브레이크, 2024)';
     $('#brandSub').textContent='보유 차량 '+VEHICLES.length+'대 · 기록 '+live().length+'건'+tail();
     let h='';
     if(isPending()){
@@ -670,6 +671,7 @@
     const v=V(route.v), list=byV(v.id), last=list[0];
     const maxKm=list.reduce((m,r)=>Math.max(m,Number(r.km)||0),0);
     const cost=list.reduce((s,r)=>s+(Number(r.cost)||0),0);
+    search.placeholder=v.name+' 안에서 검색 (예: 오일, 탑쇼바)';
     const q=search.value.trim();
     $('#brandSub').textContent=v.name+' · 기록 '+list.length+'건'+tail();
     let bodyHtml;
