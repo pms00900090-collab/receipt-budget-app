@@ -163,13 +163,19 @@ function renderTxList() {
       groups[date].forEach((t) => {
         const row = document.createElement("div");
         row.className = "tx-row";
+        const subParts = [t.category];
+        if (t.cardName) subParts.push(t.cardName);
+        if (t.installment) subParts.push(t.installment);
         row.innerHTML = `
           <span class="tx-cat-dot" style="background:${categoryColor(t.category)}"></span>
           <div class="tx-main">
             <div class="tx-item">${escapeHtml(t.item || "")}${t.store ? " · " + escapeHtml(t.store) : ""}</div>
-            <div class="tx-sub">${escapeHtml(t.category)}</div>
+            <div class="tx-sub">${escapeHtml(subParts.join(" · "))}</div>
           </div>
-          <div class="tx-amount">${formatWon(t.amount)}</div>
+          <div class="tx-amount-wrap">
+            <div class="tx-amount">${formatWon(t.amount)}</div>
+            ${t.accumulatedAmount ? `<div class="tx-accum">누적 ${formatWon(t.accumulatedAmount)}</div>` : ""}
+          </div>
         `;
         row.addEventListener("click", () => openEditSheet(t.id));
         groupEl.appendChild(row);
@@ -195,6 +201,9 @@ function addTransactions(txs) {
       category: t.category,
       amount: Number(t.amount) || 0,
       memo: t.memo || "",
+      cardName: t.cardName || "",
+      installment: t.installment || "",
+      accumulatedAmount: t.accumulatedAmount != null && t.accumulatedAmount !== "" ? Number(t.accumulatedAmount) : null,
       createdAt: now,
       updatedAt: now,
     });
@@ -298,13 +307,54 @@ function parseReceiptText(text) {
 
 // ------------------- 카톡/문자 텍스트 붙여넣기 파싱 -------------------
 
-const MSG_NOISE_RE = /Web\s*발신|승인|일시불|할부|누적|잔액|한도|국민카드|삼성카드|현대카드|신한카드|롯데카드|하나카드|우리카드|NH농협카드|nh농협카드|BC카드|bc카드|카카오뱅크|케이뱅크|토스뱅크|카카오페이|네이버페이|체크카드|신용카드|출금|입금|취소|잔여|가맹점|안내/gi;
+const MSG_NOISE_RE = /Web\s*발신|승인|일시불|할부|누적|잔액|한도|카드|은행|법인|고객센터|카카오페이|네이버페이|출금|입금|취소|잔여|가맹점|안내|스미싱|보이스피싱/gi;
+const ADDRESS_LINE_RE = /^\(.*\)$/; // "(서울 강남구 ... ☏ 02-000-0000)" 같은 가맹점 주소 줄
+const PHONE_OR_ADDR_RE = /☏|\d{2,4}-\d{3,4}-\d{4}|\d{9,}|\d+층|\d+호(?!점)/; // 전화번호/층·호수 등 주소성 텍스트
 const MSG_AMOUNT_RE = /\d{1,3}(?:,\d{3})+\s*원|\d+\s*원/g;
 const MSG_FILLER_ACTION_RE = /(결제함|결제했어요|결제했|결제|썼어요|썼음|썼다|냈어요|냈어|냈다|샀어요|샀음|샀다|마셨어요|마심|마셨|먹었어요|먹음|먹었|지출함|지출|구매함|구매했|구매|이용함|이용했|이용|낸것같음|낸듯|함\.?|했어\.?|했다\.?)/g;
 
 function toLocalISODate(d) {
   const tz = d.getTimezoneOffset() * 60000;
   return new Date(d - tz).toISOString().slice(0, 10);
+}
+
+// 카드명칭 추출: "[삼성카드]" 같은 대괄호 표기, 또는 줄 단위로 "카드/은행"이 포함된
+// 줄 중 헤더성 문구(승인/안내 등)를 뺀 마지막 후보를 사용
+function extractCardName(raw) {
+  const bracket = raw.match(/\[([^\]]*(?:카드|은행)[^\]]*)\]/);
+  if (bracket) return bracket[1].trim();
+
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  let candidate = "";
+  for (const line of lines) {
+    if (!/카드|은행/.test(line)) continue;
+    if (/고객센터|문의|상담/.test(line)) continue; // 고객센터 안내 줄은 카드 상품명이 아님
+    const c = line
+      .replace(/^[■※\-*\s]+/, "")
+      .replace(/(승인|사용\s*안내|이용\s*안내|결제\s*안내|안내)/g, "")
+      .trim();
+    // 너무 짧게 남으면(예: "카드"만 남음) 실제 카드명이 아닐 가능성이 높으므로 제외
+    if (c && c.replace(/[^가-힣A-Za-z0-9]/g, "").length >= 3) candidate = c;
+  }
+  return candidate;
+}
+
+// 일시불/할부 구분 추출: "3개월 할부", "할부 3개월", "일시불" 등
+function extractInstallment(raw) {
+  const m1 = raw.match(/(\d{1,2})\s*개월\s*할부|할부\s*(\d{1,2})\s*개월|(\d{1,2})\s*개월할부/);
+  if (m1) {
+    const months = m1[1] || m1[2] || m1[3];
+    return `${months}개월`;
+  }
+  if (/일시불/.test(raw)) return "일시불";
+  return "";
+}
+
+// 누적(잔액) 금액 추출: "총누적 1,960,790원", "누적 1,234,500원" 등 (지출 합계에는 포함되지 않는 참고용 정보)
+function extractAccumulated(raw) {
+  const m = raw.match(/(?:총\s*)?누적\s*[:\-]?\s*(\d{1,3}(?:,\d{3})*|\d+)\s*원/);
+  if (m) return Number(m[1].replace(/,/g, ""));
+  return null;
 }
 
 function splitIntoMessageBlocks(text) {
@@ -399,6 +449,8 @@ function parseSingleMessageBlock(block) {
       if (/^\d{1,2}[\/.]\d{1,2}/.test(line)) continue;
       if (/^\d{1,2}:\d{2}/.test(line)) continue;
       if (/\*.{0,6}\(\d{2,}\)/.test(line)) continue; // 마스킹된 이름(홍*동(1234)) 제외
+      if (ADDRESS_LINE_RE.test(line)) continue; // "(부산 강서구 ... ☏ 0510000000)" 같은 가맹점 주소 줄 제외
+      if (PHONE_OR_ADDR_RE.test(line)) continue; // 전화번호/층/호수 등 주소성 텍스트 제외
       MSG_NOISE_RE.lastIndex = 0;
       if (MSG_NOISE_RE.test(line)) continue;
       if (line.replace(/[^가-힣A-Za-z]/g, "").length < 2) continue;
@@ -416,10 +468,13 @@ function parseSingleMessageBlock(block) {
     MSG_NOISE_RE.lastIndex = 0;
     let cleaned = raw
       .replace(/\[[^\]]*\]/g, "") // [Web발신], [삼성카드] 등 대괄호 전체 제거
+      .replace(/\([^)]*\)/g, "") // (가맹점 주소, 전화번호 등) 괄호 전체 제거
       .replace(MSG_NOISE_RE, "")
       .replace(MSG_AMOUNT_RE, "")
       .replace(/\d{1,2}[\/.]\d{1,2}(\s+\d{1,2}:\d{2})?/g, "")
-      .replace(/\(\d+\)/g, "")
+      .replace(/☏\s*[\d-]+/g, "")
+      .replace(/\d{2,4}-\d{3,4}-\d{4}/g, "")
+      .replace(/\d{9,}/g, "")
       .replace(/[\n\r]/g, " ")
       .replace(MSG_FILLER_ACTION_RE, "")
       .replace(/\s{2,}/g, " ")
@@ -432,7 +487,11 @@ function parseSingleMessageBlock(block) {
   if (!item) item = store || "지출";
   item = item.replace(/[.,\-–_:]+$/, "").trim() || "지출";
 
-  return { date, store, item, amount };
+  const cardName = extractCardName(raw);
+  const installment = extractInstallment(raw);
+  const accumulatedAmount = extractAccumulated(raw);
+
+  return { date, store, item, amount, cardName, installment, accumulatedAmount };
 }
 
 // 카톡/문자 등 붙여넣은 텍스트에서 여러 건의 지출을 추출해 리뷰 카드 형식으로 변환
@@ -455,7 +514,14 @@ function parseMessageText(rawText) {
       name += ` (${t.date.slice(5).replace("-", "/")})`;
     }
     name = name.trim().slice(0, 28);
-    return { name, amount: t.amount, category: guessCategory((t.store || "") + " " + (t.item || "")) };
+    return {
+      name,
+      amount: t.amount,
+      category: guessCategory((t.store || "") + " " + (t.item || "")),
+      cardName: t.cardName || "",
+      installment: t.installment || "",
+      accumulatedAmount: t.accumulatedAmount != null ? t.accumulatedAmount : null,
+    };
   });
 
   return { date: commonDate, store: commonStore, items };
@@ -555,6 +621,15 @@ function addReviewRow(item) {
   node.querySelector(".rr-amount").value = item.amount || "";
   populateCategorySelect(node.querySelector(".rr-category"), item.category || "기타");
   node.querySelector(".rr-delete").addEventListener("click", () => node.remove());
+
+  const hasCardInfo = item.cardName || item.installment || item.accumulatedAmount;
+  if (hasCardInfo) {
+    node.querySelector(".rr-cardinfo").classList.remove("hidden");
+    node.querySelector(".rr-cardname").value = item.cardName || "";
+    node.querySelector(".rr-installment").value = item.installment || "";
+    node.querySelector(".rr-accumulated").value = item.accumulatedAmount || "";
+  }
+
   document.getElementById("reviewRows").appendChild(node);
 }
 
@@ -575,7 +650,11 @@ function registerReview() {
     const amount = Number(row.querySelector(".rr-amount").value);
     const category = row.querySelector(".rr-category").value;
     if (!name || !amount) continue;
-    txs.push({ date, store, item: name, amount, category });
+    const cardName = row.querySelector(".rr-cardname").value.trim();
+    const installment = row.querySelector(".rr-installment").value.trim();
+    const accumulatedRaw = row.querySelector(".rr-accumulated").value;
+    const accumulatedAmount = accumulatedRaw ? Number(accumulatedRaw) : null;
+    txs.push({ date, store, item: name, amount, category, cardName, installment, accumulatedAmount });
   }
   if (!txs.length) {
     showToast("등록할 항목이 없어요. 품목명과 금액을 입력해 주세요.");
@@ -633,6 +712,9 @@ function openEditSheet(id) {
       <label>품목 <input type="text" id="esItem" value="${escapeHtml(t.item || "")}"></label>
       <label>금액 <input type="number" id="esAmount" value="${t.amount}"></label>
       <label>카테고리 <select id="esCategory"></select></label>
+      <label>카드명칭 <input type="text" id="esCardName" placeholder="예: KB국민카드" value="${escapeHtml(t.cardName || "")}"></label>
+      <label>결제방식 <input type="text" id="esInstallment" placeholder="예: 일시불, 3개월" value="${escapeHtml(t.installment || "")}"></label>
+      <label>누적금액 <input type="number" id="esAccumulated" placeholder="카드 사용 문자의 누적금액(참고용)" value="${t.accumulatedAmount != null ? t.accumulatedAmount : ""}"></label>
       <div class="edit-sheet-actions">
         <button id="esDelete" class="text-btn" style="color:#c94a4a">삭제</button>
         <div>
@@ -662,11 +744,15 @@ function openEditSheet(id) {
     const item = overlay.querySelector("#esItem").value.trim();
     const amount = Number(overlay.querySelector("#esAmount").value);
     const category = overlay.querySelector("#esCategory").value;
+    const cardName = overlay.querySelector("#esCardName").value.trim();
+    const installment = overlay.querySelector("#esInstallment").value.trim();
+    const accumulatedRaw = overlay.querySelector("#esAccumulated").value;
+    const accumulatedAmount = accumulatedRaw ? Number(accumulatedRaw) : null;
     if (!item || !amount) {
       showToast("품목과 금액을 입력해 주세요.");
       return;
     }
-    updateTransaction(id, { date, store, item, amount, category });
+    updateTransaction(id, { date, store, item, amount, category, cardName, installment, accumulatedAmount });
     overlay.remove();
     showToast("수정됨 · 자동 저장 중");
   });
@@ -678,6 +764,38 @@ function openEditSheet(id) {
 
 function driveConfigured() {
   return typeof GOOGLE_CLIENT_ID === "string" && GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.includes("여기에_발급받은");
+}
+
+// ------------------- 액세스 토큰 캐시 (재방문 시 재로그인 없이 바로 사용) -------------------
+
+const GTOKEN_KEY = "receipt_budget_gtoken_v1";
+
+function saveTokenCache() {
+  try {
+    localStorage.setItem(GTOKEN_KEY, JSON.stringify({ access_token: accessToken, expires_at: tokenExpiresAt }));
+  } catch (e) {
+    console.warn("토큰 캐시 저장 실패", e);
+  }
+}
+
+function loadTokenCache() {
+  try {
+    const raw = localStorage.getItem(GTOKEN_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (obj && obj.access_token && obj.expires_at && Date.now() < obj.expires_at - 30000) {
+      return obj;
+    }
+  } catch (e) {
+    console.warn("토큰 캐시 읽기 실패", e);
+  }
+  return null;
+}
+
+function clearTokenCache() {
+  try {
+    localStorage.removeItem(GTOKEN_KEY);
+  } catch (e) {}
 }
 
 function initGoogleAuth() {
@@ -698,21 +816,38 @@ function initGoogleAuth() {
       if (resp && resp.access_token) {
         accessToken = resp.access_token;
         tokenExpiresAt = Date.now() + (Number(resp.expires_in) || 3500) * 1000;
+        saveTokenCache();
         setDriveStatus("on");
         setSyncMsg("드라이브에서 최신 데이터 불러오는 중...");
         await pullFromDrive();
       } else {
+        clearTokenCache();
         setDriveStatus("off");
+        setSyncMsg(resp && resp.error ? "자동 로그인이 안 됐어요. 위 '드라이브 연결' 버튼을 한 번 눌러주세요." : "");
       }
     },
   });
 
-  // 자동(조용한) 로그인 시도: 이전에 동의한 적이 있다면 팝업 없이 재인증될 수 있음
+  // 1) 이전에 저장해둔 토큰이 아직 유효하면, 재인증 없이 바로 그 토큰으로 이어서 사용
+  const cached = loadTokenCache();
+  if (cached) {
+    accessToken = cached.access_token;
+    tokenExpiresAt = cached.expires_at;
+    setDriveStatus("on");
+    setSyncMsg("드라이브에서 최신 데이터 불러오는 중...");
+    pullFromDrive();
+    return;
+  }
+
+  // 2) 캐시된 토큰이 없으면(만료됐거나 최초 방문): 화면 표시(팝업) 없이 조용히 재인증 시도.
+  //    이 브라우저에서 이전에 한 번이라도 연결을 허용했다면, 버튼을 누르지 않아도 자동으로 연결됨.
+  setSyncMsg("자동 로그인 확인 중...");
   try {
-    tokenClient.requestAccessToken({ prompt: "" });
+    tokenClient.requestAccessToken({ prompt: "none" });
   } catch (e) {
-    // 사용자 제스처가 필요한 브라우저에서는 실패할 수 있음 -> 버튼으로 연결 유도
+    // 브라우저 정책상 사용자 제스처가 필요한 경우 -> 버튼으로 연결 유도
     setDriveStatus("off");
+    setSyncMsg("");
   }
 }
 
@@ -737,7 +872,14 @@ async function driveFetch(url, options = {}) {
   const headers = Object.assign({}, options.headers, {
     Authorization: "Bearer " + accessToken,
   });
-  return fetch(url, Object.assign({}, options, { headers }));
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    // 저장된 토큰이 더 이상 유효하지 않음(취소/만료) -> 캐시를 지워서 다음 접속 시 새로 인증하도록 함
+    accessToken = null;
+    tokenExpiresAt = 0;
+    clearTokenCache();
+  }
+  return res;
 }
 
 async function findDriveFile() {
