@@ -783,6 +783,14 @@
       const all=[...text.matchAll(/(\d{1,3}(?:[,.]\s?\d{3})+|\d{4,})\s*원/g)].map(mm=>Number(mm[1].replace(/[,.\s]/g,'')));
       if(all.length)total=Math.max(...all);
     }
+    // 방법 4: 위 방법들이 다 실패했을 때의 최후 수단 — "합계"/"부가세" 글자는 어딘가에 있는데(예: "합"과 "계"가
+    // 표 칸이 갈라지며 서로 다른 줄에 떨어져 나오는 경우) 정확한 조합을 못 찾았다면, 쉼표로 천단위가 끊긴
+    // ("530,000") 진짜 "금액처럼 보이는" 숫자 중 가장 큰 값을 총액으로 씀. 전화번호·사업자번호·계좌번호처럼
+    // 쉼표 없이 붙어있는 숫자(예: "207-0162-2167")는 쉼표 그룹이 아니므로 여기서 자동으로 제외됨
+    if(!total&&(totalLabel.test(text)||vatLabel.test(text))){
+      const moneyLike=[...text.matchAll(/\d{1,3}(?:[,.]\s?\d{3})+/g)].map(mm=>Number(mm[0].replace(/[,.\s]/g,'')));
+      if(moneyLike.length)total=Math.max(...moneyLike);
+    }
     if(total)res.cost=String(total);
     if(vat)res.memo='부가세 '+won(vat)+' 포함';
 
