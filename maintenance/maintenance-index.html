@@ -665,12 +665,23 @@
     view.querySelectorAll('.rec').forEach(b=>b.onclick=()=>openSheet(recs.find(r=>r.id===b.dataset.id)));
   }
 
-  /* ── 차량 상세 ── */
+  /* ── 차량 상세 (검색어가 있으면 이 차량 안에서만 검색) ── */
   function vehicle(){
     const v=V(route.v), list=byV(v.id), last=list[0];
     const maxKm=list.reduce((m,r)=>Math.max(m,Number(r.km)||0),0);
     const cost=list.reduce((s,r)=>s+(Number(r.cost)||0),0);
+    const q=search.value.trim();
     $('#brandSub').textContent=v.name+' · 기록 '+list.length+'건'+tail();
+    let bodyHtml;
+    if(q){
+      const t=q.toLowerCase();
+      const hit=list.filter(r=>[r.title,r.shop,r.memo,r.type,r.date].join(' ').toLowerCase().includes(t));
+      const hitCost=hit.reduce((s,r)=>s+(Number(r.cost)||0),0);
+      bodyHtml='<p class="sect-label">'+v.name+' 안에서 "'+esc(q)+'" 검색 · '+hit.length+'건 · '+won(hitCost)+'</p>'+
+        (hit.length?yearsHtml(hit,false):'<div class="empty"><b>검색 결과가 없습니다</b>다른 단어로 찾아보세요<br>(정비 내용 · 정비소 · 구분 · 연도)</div>');
+    }else{
+      bodyHtml=yearsHtml(list,false);
+    }
     view.innerHTML='<button class="backbtn">← 차량 목록</button>'+
       '<div class="vhead" style="--vc:'+v.color+'">'+
       '<div class="vhead-name">'+v.icon+' '+v.name+'</div>'+
@@ -680,13 +691,13 @@
       '<div class="st"><div class="st-k">누적 비용</div><div class="st-v">'+(cost?won(cost):'—')+'</div></div>'+
       '</div></div>'+
       '<div class="addbar"><button class="btn-main" id="btnAdd">＋ 정비 기록 추가</button></div>'+
-      yearsHtml(list,false);
-    view.querySelector('.backbtn').onclick=()=>{route={name:'home'};render();};
+      bodyHtml;
+    view.querySelector('.backbtn').onclick=()=>{route={name:'home'};search.value='';$('#clearSearch').hidden=true;render();};
     $('#btnAdd').onclick=()=>openSheet(null);
     bindList();
   }
 
-  /* ── 검색 ── */
+  /* ── 검색 (차량 목록 화면에서 검색 — 전체 차량 대상) ── */
   function results(q){
     const t=q.trim().toLowerCase();
     const hit=live().filter(r=>[r.title,r.shop,r.memo,r.type,r.date,V(r.v).name].join(' ').toLowerCase().includes(t))
@@ -701,8 +712,9 @@
   function render(){
     const q=search.value;
     $('#clearSearch').hidden=!q;
+    if(route.name==='v')return vehicle();
     if(q.trim())return results(q);
-    route.name==='v'?vehicle():home();
+    home();
   }
 
   /* ── 입력 시트 ── */
@@ -749,7 +761,8 @@
     if(dm)res.date=dm[1]+'-'+pad(+dm[2])+'-'+pad(+dm[3]);
 
     // 합계/총액 외에 공급가액(세금계산서·정비명세서류)도 총액 후보로 봄 — 부품비+공임 등 여러 열이 있으면 최댓값이 보통 최종 합계
-    const totalLabel=/합\s*계|결제\s*금액|총\s*액|총\s*금액|받을\s*금액|승인\s*금액|공급가액/;
+    // OCR이 "공급가액" 앞부분("공급")을 놓치고 "가액"만 남기는 경우도 있어 그 형태도 라벨로 인정함
+    const totalLabel=/합\s*계|결제\s*금액|총\s*액|총\s*금액|받을\s*금액|승인\s*금액|공급\s*가?\s*액|가\s*액/;
     const vatLabel=/부가\s*가?\s*치?\s*세|VAT/i;
     let total=null, vat=null;
 
@@ -794,7 +807,7 @@
     if(total)res.cost=String(total);
     if(vat)res.memo='부가세 '+won(vat)+' 포함';
 
-    const itemKeywords=/오일|타이어|점검|교체|교환|수리|검사|배터리|필터|브레이크|세차|정비\s/;
+    const itemKeywords=/오일|타이어|점검|교체|교환|수리|검사|배터리|필터|브레이크|세차|냉각수|정비\s/;
     // 표 제목/서식 번호(대괄호로 감싼 줄)나 "점검/정비의뢰일자" 같은 항목 이름줄은 실제 정비 내용이 아니므로 제외
     // "정비업자가 점검·정비를 잘못하여 다음 각 호의 기간중 발생하는 고장 등에 대하여는..." 같은 정비 관련 법정 고지문/보증안내문도
     // 실제 정비 내용이 아니므로 제외(정비업자/각 호/무상수리/고장 등 표현이 있으면 고지문으로 판단)
@@ -865,7 +878,7 @@
         for(let j=o.idx+1;j<windowEnd;j++){
           numsFrom(mergedLines[j]).filter(n=>n>=1000).forEach(n=>{ if(!windowNums.includes(n))windowNums.push(n); });
         }
-        if(windowNums.length)priceLines.push((k+1)+'. '+o.text+' — '+windowNums.slice(0,2).map(won).join(' / '));
+        priceLines.push((k+1)+'. '+o.text+(windowNums.length?' — '+windowNums.slice(0,2).map(won).join(' / '):''));
       });
       if(priceLines.length){
         const extra=priceLines.join('\n');
