@@ -60,8 +60,24 @@
   <!-- 카톡/문자 텍스트 붙여넣기 -->
   <section class="card">
     <h2>카톡/문자로 입력</h2>
-    <textarea id="pasteTextInput" class="paste-textarea" rows="4" placeholder="카카오톡 메시지나 카드 승인 문자를 복사해서 여기에 붙여넣으세요. 예) 스타벅스에서 커피 4500원 마심"></textarea>
-    <button id="pasteTextBtn" class="secondary-btn small">✂️ 붙여넣은 텍스트 분석하기</button>
+    <textarea id="pasteTextInput" class="paste-textarea" rows="4" placeholder="카드 승인 문자, 계좌 입출금/이체 문자, 카드사 결제명세서를 복사해서 여기에 붙여넣으세요. 여러 건을 한 번에 붙여넣어도 자동으로 나눠서 아래 수집함에 담아요."></textarea>
+    <button id="pasteTextBtn" class="secondary-btn small">📥 수집함에 담기</button>
+  </section>
+
+  <!-- 결제문자 수집함 -->
+  <section class="card" id="inboxCard">
+    <h2>📥 결제문자 수집함 <span id="inboxCount" class="inbox-count"></span></h2>
+    <p class="inbox-hint">문자가 올 때마다, 또는 하루치를 몰아서 붙여넣으세요. 같은 문자를 다시 붙여넣어도 중복으로 쌓이지 않아요. 마무리할 때 확인하고 한 번에 가계부에 등록하거나 복사하세요.</p>
+    <div id="inboxSelectAllWrap" class="inbox-selectall hidden">
+      <label><input type="checkbox" id="inboxSelectAll"> 전체 선택</label>
+    </div>
+    <div id="inboxList" class="inbox-list"></div>
+    <div id="inboxEmpty" class="empty-state">아직 모아둔 결제문자가 없어요. 위에서 문자를 붙여넣어 보세요.</div>
+    <div id="inboxActions" class="inbox-actions hidden">
+      <button id="inboxCopyBtn" class="secondary-btn small">📋 선택 복사</button>
+      <button id="inboxDeleteBtn" class="text-btn" style="color:#c94a4a">선택 삭제</button>
+      <button id="inboxRegisterBtn" class="primary-btn">선택 항목 가계부 등록</button>
+    </div>
   </section>
 
   <!-- 인식 결과 편집 -->

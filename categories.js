@@ -10,6 +10,7 @@ const CATEGORIES = [
   { key: "생활/잡화",  color: "#7a7a5c" },
   { key: "문화/여가",  color: "#4a9a8a" },
   { key: "통신/구독",  color: "#5c5c9a" },
+  { key: "수입",      color: "#3a7bd5" },
   { key: "기타",      color: "#8a8a8a" },
 ];
 

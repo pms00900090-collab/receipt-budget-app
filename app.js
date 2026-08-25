@@ -8,6 +8,8 @@ const LAST_SYNC_KEY = "receipt_budget_last_sync_v1";
 
 let state = {
   transactions: [], // {id, date, store, item, category, amount, memo, createdAt, updatedAt}
+  inbox: [], // 결제문자 수집함: 붙여넣어서 인식은 됐지만 아직 가계부에 등록하지 않은 항목들
+  seenMessageHashes: {}, // 중복 방지용: 이미 수집함에 넣어본 문자의 해시 -> 추가된 시각(ms)
 };
 
 let driveFileId = null;
@@ -69,6 +71,13 @@ function loadLocal() {
   } catch (e) {
     console.warn("로컬 데이터 로드 실패", e);
   }
+  normalizeState();
+}
+
+// 예전 버전 데이터(수집함 필드가 없는 상태)를 열었을 때도 안전하게 동작하도록 기본값을 채움
+function normalizeState() {
+  if (!Array.isArray(state.inbox)) state.inbox = [];
+  if (!state.seenMessageHashes || typeof state.seenMessageHashes !== "object") state.seenMessageHashes = {};
 }
 
 function saveLocal() {
@@ -95,6 +104,7 @@ function populateCategorySelect(sel, selected) {
 function renderAll() {
   renderSummary();
   renderTxList();
+  renderInbox();
 }
 
 function currentMonthKey() {
@@ -533,14 +543,310 @@ function handlePasteTextParse() {
     showToast("붙여넣은 텍스트가 없어요.");
     return;
   }
-  const parsed = parseMessageText(raw);
-  if (!parsed || !parsed.items.length) {
+  const result = addBlocksToInbox(raw);
+  document.getElementById("pasteTextInput").value = "";
+
+  if (!result.added && !result.dup) {
     showToast("금액을 찾지 못했어요. 직접 입력해 주세요.");
     openQuickAdd();
     return;
   }
-  openReviewCard(parsed);
-  document.getElementById("pasteTextInput").value = "";
+  const parts = [];
+  if (result.added) parts.push(`${result.added}건 수집함에 담았어요`);
+  if (result.dup) parts.push(`중복 ${result.dup}건 제외`);
+  if (result.unrecognized) parts.push(`인식 못한 ${result.unrecognized}건`);
+  showToast(parts.join(" · "));
+  const inboxCard = document.getElementById("inboxCard");
+  if (inboxCard) inboxCard.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ------------------- 결제문자 수집함 (카드결제·계좌이체·카드명세서 문자 자동 수집) -------------------
+
+// 같은 문자를 두 번 붙여넣어도 중복으로 쌓이지 않도록, 문자 내용을 정규화해 짧은 해시로 만듦
+function hashText(s) {
+  const norm = String(s).replace(/\s+/g, " ").trim().toLowerCase();
+  let h = 0;
+  for (let i = 0; i < norm.length; i++) {
+    h = (h * 31 + norm.charCodeAt(i)) | 0;
+  }
+  return "h" + (h >>> 0).toString(36) + "_" + norm.length;
+}
+
+// 너무 오래된 해시 기록은 계속 쌓이지 않도록 주기적으로 정리 (120일 지난 것만 제거)
+function pruneSeenHashes() {
+  const cutoff = Date.now() - 120 * 24 * 60 * 60 * 1000;
+  Object.keys(state.seenMessageHashes).forEach((h) => {
+    if (state.seenMessageHashes[h] < cutoff) delete state.seenMessageHashes[h];
+  });
+}
+
+// 카드결제 문자인지, 계좌 입출금/이체 문자인지 대략 구분 (표시용 뱃지)
+function detectMessageSource(raw) {
+  if (/카드/.test(raw)) return "card";
+  if (/입금|출금|이체|송금|계좌/.test(raw)) return "bank";
+  return "etc";
+}
+
+// 돈이 나간 건(지출)인지 들어온 건(입금/수입)인지 대략 구분
+function guessFlowType(raw) {
+  const hasIn = /입금/.test(raw);
+  const hasOut = /출금|이체|송금|결제|승인|사용|보냈|지출|인출/.test(raw);
+  if (hasIn && !hasOut) return "income";
+  return "expense";
+}
+
+// 붙여넣은 텍스트(문자 1건이든, 하루치를 몰아 붙여넣었든, 카드명세서처럼 여러 건이 뭉쳐있든)를
+// 문자 단위로 쪼개 인식하고, 이미 수집함에 있던 것과 같은 문자는 자동으로 제외한 뒤 수집함에 담음
+function addBlocksToInbox(rawText) {
+  const blocks = splitIntoMessageBlocks(rawText);
+  let added = 0;
+  let dup = 0;
+  let unrecognized = 0;
+  const now = Date.now();
+  pruneSeenHashes();
+
+  blocks.forEach((block) => {
+    const h = hashText(block);
+    if (state.seenMessageHashes[h]) {
+      dup++;
+      return;
+    }
+    const parsed = parseSingleMessageBlock(block);
+    if (!parsed || !parsed.amount) {
+      unrecognized++;
+      return;
+    }
+    state.seenMessageHashes[h] = now;
+    const source = detectMessageSource(block);
+    const flowType = guessFlowType(block);
+    const category = flowType === "income" ? "수입" : guessCategory((parsed.store || "") + " " + (parsed.item || ""));
+
+    state.inbox.push({
+      id: uid(),
+      raw: block,
+      hash: h,
+      date: parsed.date,
+      store: parsed.store || "",
+      item: parsed.item || "",
+      amount: parsed.amount,
+      category,
+      cardName: parsed.cardName || "",
+      installment: parsed.installment || "",
+      accumulatedAmount: parsed.accumulatedAmount != null ? parsed.accumulatedAmount : null,
+      source,
+      flowType,
+      selected: flowType !== "income",
+      createdAt: now,
+    });
+    added++;
+  });
+
+  onDataChanged();
+  return { added, dup, unrecognized, totalBlocks: blocks.length };
+}
+
+function renderInbox() {
+  const wrap = document.getElementById("inboxList");
+  if (!wrap) return; // index.html이 아직 업데이트 전이면 조용히 무시
+  const empty = document.getElementById("inboxEmpty");
+  const countEl = document.getElementById("inboxCount");
+  const actions = document.getElementById("inboxActions");
+  const selectAllWrap = document.getElementById("inboxSelectAllWrap");
+  const selectAllBox = document.getElementById("inboxSelectAll");
+
+  wrap.innerHTML = "";
+  const hasItems = state.inbox.length > 0;
+  countEl.textContent = hasItems ? `${state.inbox.length}건` : "";
+  empty.classList.toggle("hidden", hasItems);
+  actions.classList.toggle("hidden", !hasItems);
+  selectAllWrap.classList.toggle("hidden", !hasItems);
+  if (selectAllBox) selectAllBox.checked = hasItems && state.inbox.every((x) => x.selected);
+  if (!hasItems) return;
+
+  const sorted = [...state.inbox].sort((a, b) => b.createdAt - a.createdAt);
+  sorted.forEach((it) => {
+    const row = document.createElement("div");
+    row.className = "inbox-row";
+    const badges = [it.source === "card" ? "카드" : it.source === "bank" ? "계좌" : "기타"];
+    if (it.flowType === "income") badges.push("입금");
+    if (it.cardName) badges.push(it.cardName);
+    if (it.installment) badges.push(it.installment);
+    row.innerHTML = `
+      <input type="checkbox" class="ib-check" ${it.selected ? "checked" : ""}>
+      <div class="ib-main">
+        <div class="ib-top">
+          <span class="ib-store">${escapeHtml(it.store || it.item || "지출")}</span>
+          <span class="ib-amount ${it.flowType === "income" ? "ib-income" : ""}">${it.flowType === "income" ? "+" : ""}${formatWon(it.amount)}</span>
+        </div>
+        <div class="ib-sub">
+          <span>${it.date}</span>
+          <span class="ib-badges">${badges.map((b) => `<span class="ib-badge">${escapeHtml(b)}</span>`).join("")}</span>
+        </div>
+      </div>
+      <button type="button" class="ib-del" title="삭제">✕</button>
+    `;
+    row.querySelector(".ib-check").addEventListener("change", (e) => {
+      e.stopPropagation();
+      it.selected = e.target.checked;
+      saveLocal();
+      renderInbox();
+      scheduleDriveSave();
+    });
+    row.querySelector(".ib-del").addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.inbox = state.inbox.filter((x) => x.id !== it.id);
+      onDataChanged();
+    });
+    row.addEventListener("click", () => openInboxEditSheet(it.id));
+    wrap.appendChild(row);
+  });
+}
+
+function inboxToggleAll(checked) {
+  state.inbox.forEach((it) => (it.selected = checked));
+  onDataChanged();
+}
+
+function inboxDeleteSelected() {
+  const n = state.inbox.filter((x) => x.selected).length;
+  if (!n) {
+    showToast("선택된 항목이 없어요.");
+    return;
+  }
+  if (!confirm(`선택한 ${n}건을 수집함에서 삭제할까요?`)) return;
+  state.inbox = state.inbox.filter((x) => !x.selected);
+  onDataChanged();
+  showToast("삭제됨");
+}
+
+function inboxCopySelected() {
+  const items = state.inbox.filter((x) => x.selected);
+  if (!items.length) {
+    showToast("선택된 항목이 없어요.");
+    return;
+  }
+  const sorted = [...items].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const lines = sorted.map((it) => {
+    const sign = it.flowType === "income" ? "+" : "-";
+    const extra = [it.cardName, it.installment].filter(Boolean).join(" ");
+    return `${it.date}\t${it.store || it.item}\t${sign}${Math.round(it.amount).toLocaleString("ko-KR")}원\t${it.category}${extra ? "\t" + extra : ""}`;
+  });
+  const expenseTotal = sorted.filter((it) => it.flowType !== "income").reduce((s, it) => s + it.amount, 0);
+  const text = lines.join("\n") + `\n\n지출 합계: ${formatWon(expenseTotal)}`;
+  copyToClipboard(text);
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast("복사됐어요. 가계부에 붙여넣으세요."),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand("copy");
+    showToast("복사됐어요. 가계부에 붙여넣으세요.");
+  } catch (e) {
+    showToast("복사에 실패했어요. 직접 선택해서 복사해 주세요.");
+  }
+  document.body.removeChild(ta);
+}
+
+function inboxRegisterSelected() {
+  const items = state.inbox.filter((x) => x.selected);
+  if (!items.length) {
+    showToast("선택된 항목이 없어요.");
+    return;
+  }
+  const txs = items.map((it) => ({
+    date: it.date,
+    store: it.store && it.store !== it.item ? it.store : "",
+    item: it.item || it.store || "지출",
+    amount: it.amount,
+    category: it.category,
+    cardName: it.cardName,
+    installment: it.installment,
+    accumulatedAmount: it.accumulatedAmount,
+  }));
+  addTransactions(txs);
+  const ids = new Set(items.map((x) => x.id));
+  state.inbox = state.inbox.filter((x) => !ids.has(x.id));
+  onDataChanged();
+  showToast(`${txs.length}건 가계부에 등록됨 · 자동 저장 중`);
+}
+
+function openInboxEditSheet(id) {
+  const it = state.inbox.find((x) => x.id === id);
+  if (!it) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "edit-overlay";
+  overlay.innerHTML = `
+    <div class="edit-sheet">
+      <h3>수집함 항목 수정</h3>
+      <label>날짜 <input type="date" id="ibDate" value="${it.date}"></label>
+      <label>매장/메모 <input type="text" id="ibStore" value="${escapeHtml(it.store || "")}"></label>
+      <label>품목 <input type="text" id="ibItem" value="${escapeHtml(it.item || "")}"></label>
+      <label>금액 <input type="number" id="ibAmount" value="${it.amount}"></label>
+      <label>카테고리 <select id="ibCategory"></select></label>
+      <label>구분
+        <select id="ibFlowType">
+          <option value="expense">지출</option>
+          <option value="income">입금(수입)</option>
+        </select>
+      </label>
+      <details style="margin:4px 0 10px">
+        <summary style="font-size:12px;color:var(--ink-soft);cursor:pointer">원문 문자 보기</summary>
+        <div style="font-size:12px;color:var(--ink-soft);white-space:pre-wrap;margin-top:6px;line-height:1.5">${escapeHtml(it.raw)}</div>
+      </details>
+      <div class="edit-sheet-actions">
+        <button id="ibDelete" class="text-btn" style="color:#c94a4a">삭제</button>
+        <div>
+          <button id="ibCancel" class="text-btn">취소</button>
+          <button id="ibSave" class="primary-btn">저장</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  populateCategorySelect(overlay.querySelector("#ibCategory"), it.category);
+  overlay.querySelector("#ibFlowType").value = it.flowType || "expense";
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  overlay.querySelector("#ibCancel").addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#ibDelete").addEventListener("click", () => {
+    state.inbox = state.inbox.filter((x) => x.id !== id);
+    overlay.remove();
+    onDataChanged();
+    showToast("삭제됨");
+  });
+  overlay.querySelector("#ibSave").addEventListener("click", () => {
+    const date = overlay.querySelector("#ibDate").value || it.date;
+    const store = overlay.querySelector("#ibStore").value.trim();
+    const item = overlay.querySelector("#ibItem").value.trim() || store || "지출";
+    const amountVal = Number(overlay.querySelector("#ibAmount").value);
+    const amount = amountVal || it.amount;
+    const category = overlay.querySelector("#ibCategory").value;
+    const flowType = overlay.querySelector("#ibFlowType").value;
+    Object.assign(it, { date, store, item, amount, category, flowType });
+    overlay.remove();
+    onDataChanged();
+    showToast("수정됨");
+  });
 }
 
 // ------------------- OCR 실행 -------------------
@@ -944,6 +1250,7 @@ async function pullFromDrive() {
       const remote = JSON.parse(text);
       if (remote && Array.isArray(remote.transactions)) {
         state = remote; // 최신 정보로 덮어쓰기
+        normalizeState();
         saveLocal();
         renderAll();
       }
@@ -1033,6 +1340,12 @@ function init() {
   document.getElementById("cameraInput").addEventListener("change", (e) => handleReceiptFile(e.target.files[0]));
   document.getElementById("galleryInput").addEventListener("change", (e) => handleReceiptFile(e.target.files[0]));
   document.getElementById("pasteTextBtn").addEventListener("click", handlePasteTextParse);
+
+  document.getElementById("inboxSelectAll").addEventListener("change", (e) => inboxToggleAll(e.target.checked));
+  document.getElementById("inboxCopyBtn").addEventListener("click", inboxCopySelected);
+  document.getElementById("inboxDeleteBtn").addEventListener("click", inboxDeleteSelected);
+  document.getElementById("inboxRegisterBtn").addEventListener("click", inboxRegisterSelected);
+
   document.getElementById("addRowBtn").addEventListener("click", () => addReviewRow({ name: "", amount: "", category: "기타" }));
   document.getElementById("cancelReviewBtn").addEventListener("click", closeReviewCard);
   document.getElementById("registerBtn").addEventListener("click", registerReview);
