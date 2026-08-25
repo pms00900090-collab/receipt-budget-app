@@ -2099,7 +2099,7 @@
   }
 
   function parseDispatchText(text) {
-    var result = { date: null, pickup: null, dest: null, dropoff: null, client: null, clientGuessed: false, containerNo: null, times: [] };
+    var result = { date: null, pickup: null, dest: null, destIsAddress: false, dropoff: null, client: null, clientGuessed: false, containerNo: null, times: [] };
 
     var dateMatch = text.match(/(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*(?:\(\s*[월화수목금토일]\s*\))?/);
     if (dateMatch) {
@@ -2130,7 +2130,7 @@
     if (result.dropoff) result.dropoff = stripTrailingTimeInfo(result.dropoff);
 
     var address = findDispatchAddress(text);
-    if (address) result.dest = address;
+    if (address) { result.dest = address; result.destIsAddress = true; }
 
     result.client = grabDispatchLabel(text, ["화주", "거래처명", "거래처"]);
     if (!result.client) {
@@ -2184,9 +2184,11 @@
     if (r.client) document.getElementById("fClient").value = r.client;
     if (r.containerNo) document.getElementById("fContainer").value = r.containerNo;
 
-    // 출발지·도착지만 계산기 카드에도 남겨서 "계산기 열기"의 자동 복사가 계속 되게 함
+    // 출발지·도착지만 계산기 카드에도 남겨서 "계산기 열기"의 자동 복사가 계속 되게 함.
+    // 도착지는 실제 주소(도로명/지번)를 찾았을 때만 채웁니다 — 회사/작업지 이름만 있으면
+    // 안전운임 계산기에 넣어도 조회가 안 되니, 그럴 땐 비워둬서 직접 주소를 넣게 합니다.
     if (r.pickup) document.getElementById("qFrom").value = r.pickup;
-    if (r.dest) document.getElementById("qTo").value = r.dest;
+    if (r.dest && r.destIsAddress) document.getElementById("qTo").value = r.dest;
     updateCopyRouteHint();
 
     var html = "";
