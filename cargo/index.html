@@ -766,6 +766,8 @@
   }
   .relock-btn:hover { color: var(--text); border-color: var(--accent); }
   .relock-btn:disabled { opacity: 0.5; cursor: default; }
+  .relock-btn.sync-ok { border-color: var(--positive); color: var(--positive); }
+  .relock-btn.sync-warn { border-color: var(--negative); color: var(--negative); }
 
   .topbar-actions {
     display: flex;
@@ -903,6 +905,7 @@
         <button type="button" class="btn-secondary" id="driveSignOutBtn">로그아웃</button>
       </div>
       <p class="save-status" id="driveStatus" role="status" aria-live="polite"></p>
+      <p class="search-hint" id="driveLastSync"></p>
       <div id="exportFallbackWrap" hidden>
         <p class="search-hint">파일로 저장할 수 없는 화면이에요. 아래 내용을 눌러 전체 선택한 뒤 복사해서, 다른 기기의 "텍스트로 가져오기"에 붙여넣으세요.</p>
         <textarea id="exportFallbackText" class="io-textarea" readonly rows="4"></textarea>
@@ -1134,9 +1137,26 @@
   function closeDataTransfer() {
     document.getElementById("dataTransferOverlay").classList.remove("open");
   }
+  function renderDriveLastSync() {
+    var el = document.getElementById("driveLastSync");
+    if (!el) return;
+    var raw;
+    try { raw = localStorage.getItem(DRIVE_LAST_SYNC_KEY); } catch (e) { raw = null; }
+    if (!raw) { el.textContent = "아직 Google 드라이브에 백업된 적이 없어요."; return; }
+    var ts = Number(raw);
+    var diffMin = Math.round((Date.now() - ts) / 60000);
+    var when;
+    if (diffMin < 1) when = "방금 전";
+    else if (diffMin < 60) when = diffMin + "분 전";
+    else if (diffMin < 60 * 24) when = Math.round(diffMin / 60) + "시간 전";
+    else when = Math.round(diffMin / (60 * 24)) + "일 전";
+    el.textContent = "마지막 드라이브 백업: " + when;
+  }
+
   document.getElementById("dataTransferBtn").addEventListener("click", function () {
     document.getElementById("dataTransferOverlay").classList.add("open");
-    performDriveExport();
+    renderDriveLastSync();
+    performDriveExport().then(renderDriveLastSync);
   });
   document.getElementById("dataTransferClose").addEventListener("click", closeDataTransfer);
   document.getElementById("dataTransferOverlay").addEventListener("click", function (e) {
@@ -1591,8 +1611,46 @@
   // 이 앱 자신의 Google OAuth 클라이언트로 직접 로그인 → Drive REST API를 호출합니다.
   var DRIVE_CLIENT_ID = "104858973577-7naknkqhdaaav9lghv3m6cfca1s53scr.apps.googleusercontent.com";
   var DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-  var driveAccessToken = null;
+  var DRIVE_TOKEN_KEY = "cargoDriveTokenV1";
+  var DRIVE_LAST_SYNC_KEY = "cargoDriveLastSyncV1";
   var driveTokenClient = null;
+
+  // 로그인 토큰은 원래 JS 변수에만 있어서 새로고침/앱 재실행할 때마다 사라지고 그때마다
+  // 다시 로그인해야 했습니다 — 그게 "자동 로그인이 안 된다"는 문제의 원인이었어요.
+  // 이제 토큰을 이 기기의 localStorage에 저장해뒀다가, 유효기간(보통 1시간) 안이면
+  // 앱을 새로 열어도 로그인 없이 바로 이어서 씁니다.
+  function saveDriveToken(token, expiresInSec) {
+    driveAccessToken = token;
+    try {
+      var expiresAt = Date.now() + Math.max(0, (Number(expiresInSec) || 3600) - 120) * 1000;
+      localStorage.setItem(DRIVE_TOKEN_KEY, JSON.stringify({ token: token, expiresAt: expiresAt }));
+    } catch (e) { /* localStorage 못 쓰는 상황이면 그냥 메모리에만 유지 */ }
+  }
+  function loadPersistedDriveToken() {
+    try {
+      var raw = localStorage.getItem(DRIVE_TOKEN_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (!data || !data.token || !data.expiresAt || Date.now() >= data.expiresAt) return null;
+      return data.token;
+    } catch (e) { return null; }
+  }
+  function clearDriveToken() {
+    driveAccessToken = null;
+    try { localStorage.removeItem(DRIVE_TOKEN_KEY); } catch (e) { /* ignore */ }
+  }
+
+  var driveAccessToken = loadPersistedDriveToken();
+
+  // 데이터 이동 모달을 열지 않아도 지금 자동 백업이 잘 되고 있는지 한눈에 보이도록,
+  // 상단 🔃 버튼 테두리 색으로 상태를 표시합니다: 초록=최근 동기화 성공, 빨강=로그인 필요.
+  function setDriveSyncIndicator(state) {
+    var btn = document.getElementById("dataTransferBtn");
+    if (!btn) return;
+    btn.classList.remove("sync-ok", "sync-warn");
+    if (state === "ok") btn.classList.add("sync-ok");
+    else if (state === "warn") btn.classList.add("sync-warn");
+  }
 
   function getDriveTokenClient() {
     if (driveTokenClient) return driveTokenClient;
@@ -1612,8 +1670,9 @@
       var client = getDriveTokenClient();
       if (!client) { resolve(null); return; }
       client.callback = function (resp) {
-        driveAccessToken = (resp && resp.access_token) || null;
-        resolve(driveAccessToken);
+        var token = (resp && resp.access_token) || null;
+        if (token) saveDriveToken(token, resp.expires_in);
+        resolve(token);
       };
       client.error_callback = function () { resolve(null); };
       try {
@@ -1633,7 +1692,8 @@
     if (driveAccessToken && window.google && google.accounts && google.accounts.oauth2) {
       try { google.accounts.oauth2.revoke(driveAccessToken, function () {}); } catch (e) {}
     }
-    driveAccessToken = null;
+    clearDriveToken();
+    setDriveSyncIndicator(null);
   }
 
   function driveEscapeQuote(s) {
@@ -1655,7 +1715,7 @@
     opts.headers["Authorization"] = "Bearer " + driveAccessToken;
     var res = await fetch(url, opts);
     if (res.status === 401) {
-      driveAccessToken = null;
+      clearDriveToken();
       var authErr = new Error("Drive 인증이 만료됐어요.");
       authErr.code = "needs_reauth";
       throw authErr;
@@ -1800,9 +1860,13 @@
     driveSyncBusy = true;
     driveSyncCore().then(function () {
       driveSyncBusy = false;
+      setDriveSyncIndicator("ok");
+      try { localStorage.setItem(DRIVE_LAST_SYNC_KEY, String(Date.now())); } catch (e) { /* ignore */ }
       if (driveSyncQueued) { driveSyncQueued = false; autoDriveSync(); }
-    }).catch(function () {
+    }).catch(function (err) {
       driveSyncBusy = false;
+      var code = err && err.code;
+      if (code === "needs_signin" || code === "needs_reauth") setDriveSyncIndicator("warn");
       if (driveSyncQueued) { driveSyncQueued = false; autoDriveSync(); }
     });
   }
@@ -1829,6 +1893,8 @@
         driveStatus.textContent = (result.mergedIn ? "다른 기기 기록과 합쳐서 " : "") +
           "Google 드라이브 동기화 완료 (" + result.count + "건) — 이제 기록을 저장/삭제할 때마다 자동으로 백업됩니다.";
         driveStatus.className = "save-status ok";
+        setDriveSyncIndicator("ok");
+        try { localStorage.setItem(DRIVE_LAST_SYNC_KEY, String(Date.now())); } catch (e2) { /* ignore */ }
       }
     } catch (err) {
       var code = err && err.code;
@@ -1844,6 +1910,7 @@
         driveStatus.textContent = "드라이브 동기화에 실패했어요. 위의 '내보내기'로 파일을 저장해주세요.";
       }
       driveStatus.className = "save-status error";
+      setDriveSyncIndicator("warn");
     } finally {
       btn.disabled = false;
     }
@@ -2076,25 +2143,34 @@
   // the address. We do NOT just stop at the first digit found, because Korean road names can
   // have a number baked into the name itself (e.g. "중앙대로1048번길" contains "1048" but that's
   // not the building number — the real one, "59", comes right after as its own token).
-  var DISPATCH_PROVINCE_RE = /(?:서울특별시|부산광역시|인천광역시|대구광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|경기도|강원도|제주특별자치도|경상남도|경상북도|전라남도|전라북도|충청남도|충청북도|서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/;
+  var DISPATCH_PROVINCE_RE = /(?:서울특별시|부산광역시|인천광역시|대구광역시|광주광역시|대전광역시|울산광역시|세종특별자치시|경기도|강원도|제주특별자치도|경상남도|경상북도|전라남도|전라북도|충청남도|충청북도|서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/g;
 
+  // 문장 안에 지명이 여러 번 나올 수 있어요 (예: "작업지 : 대전 한솔제지" 라는 라벨과, 그 아래
+  // 진짜 주소인 "대전 대덕구 신일동 1674-2" 둘 다 "대전"으로 시작). 첫 번째로 걸리는 지명이
+  // 라벨일 뿐 번지수가 없으면 그건 건너뛰고, 다음 지명부터 다시 시도해서 실제 번지수가
+  // 붙어있는 진짜 주소를 찾을 때까지 계속 시도합니다.
   function findDispatchAddress(text) {
-    var startMatch = text.match(DISPATCH_PROVINCE_RE);
-    if (!startMatch) return null;
-    var startIdx = startMatch.index;
-    var lineEnd = text.indexOf("\n", startIdx);
-    var line = lineEnd === -1 ? text.slice(startIdx) : text.slice(startIdx, lineEnd);
-    var tokens = line.split(/\s+/).filter(Boolean);
-    var picked = [];
-    for (var i = 0; i < tokens.length && i < 14; i++) {
-      var tok = tokens[i];
-      picked.push(tok);
-      var cleaned = tok.replace(/^[(]+/, "").replace(/[),.]+$/, "");
-      if (/^\d+(?:-\d+)?$/.test(cleaned)) {
-        return picked.join(" ");
+    var re = new RegExp(DISPATCH_PROVINCE_RE.source, "g");
+    var m;
+    while ((m = re.exec(text)) !== null) {
+      var startIdx = m.index;
+      var lineEnd = text.indexOf("\n", startIdx);
+      var line = lineEnd === -1 ? text.slice(startIdx) : text.slice(startIdx, lineEnd);
+      var tokens = line.split(/\s+/).filter(Boolean);
+      var picked = [];
+      var found = null;
+      for (var i = 0; i < tokens.length && i < 14; i++) {
+        var tok = tokens[i];
+        picked.push(tok);
+        var cleaned = tok.replace(/^[(]+/, "").replace(/[),.]+$/, "");
+        if (/^\d+(?:-\d+)?$/.test(cleaned)) {
+          found = picked.join(" ");
+          break;
+        }
       }
+      if (found) return found;
+      // no standalone building/lot number on this line — try the next occurrence of a place name
     }
-    // no standalone building/lot number found on that line — don't guess a truncated address
     return null;
   }
 
