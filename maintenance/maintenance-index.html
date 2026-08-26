@@ -759,8 +759,24 @@
     // "190, 000"처럼 쉼표 뒤에 공백이 끼어드는 OCR 오탈자도 같이 받아줌
     const numsFrom=s=>[...s.matchAll(/(\d{1,3}(?:[,.]\s?\d{3})+|\d{4,})/g)].map(mm=>Number(mm[1].replace(/[,.\s]/g,'')));
 
-    const dm=text.match(/(\d{4})\s*[.\-\/년]\s*(\d{1,2})\s*[.\-\/월]\s*(\d{1,2})\s*일?/);
-    if(dm)res.date=dm[1]+'-'+pad(+dm[2])+'-'+pad(+dm[3]);
+    // 날짜가 여러 개인 명세서(차량 등록/신차출고일 + 실제 점검·정비일자)에서 무조건 텍스트상 첫 날짜를 쓰면
+    // "등록연월일"(오래된 신차출고일) 쪽을 잘못 집는 경우가 있어, 그 라벨 근처 날짜는 후보에서 빼고
+    // "의뢰일자/점검일자/정비일자/접수일자/완료일/출고일" 라벨에 가장 가까운 날짜를 우선으로 씀
+    const dateMatches=[...text.matchAll(/(\d{4})\s*[.\-\/년]\s*(\d{1,2})\s*[.\-\/월]\s*(\d{1,2})\s*일?/g)];
+    if(dateMatches.length){
+      const regIdx=[...text.matchAll(/등록\s*연?\s*월?\s*일|신차\s*출고/g)].map(m=>m.index);
+      const prefIdx=[...text.matchAll(/의뢰\s*일자|점검\s*일자|정비\s*일자|접수\s*일자|완료\s*일|출고\s*일/g)].map(m=>m.index);
+      const isNearReg=idx=>regIdx.some(r=>idx>r&&idx-r<20);
+      let candidates=dateMatches.filter(m=>!isNearReg(m.index));
+      if(!candidates.length)candidates=dateMatches;
+      let chosen=candidates[0];
+      if(prefIdx.length){
+        let best=null,bestDist=Infinity;
+        candidates.forEach(m=>{ prefIdx.forEach(p=>{ const d=Math.abs(m.index-p); if(d<bestDist){bestDist=d;best=m;} }); });
+        if(best)chosen=best;
+      }
+      res.date=chosen[1]+'-'+pad(+chosen[2])+'-'+pad(+chosen[3]);
+    }
 
     // 합계/총액 외에 공급가액(세금계산서·정비명세서류)도 총액 후보로 봄 — 부품비+공임 등 여러 열이 있으면 최댓값이 보통 최종 합계
     // OCR이 "공급가액" 앞부분("공급")을 놓치고 "가액"만 남기는 경우도 있어 그 형태도 라벨로 인정함
