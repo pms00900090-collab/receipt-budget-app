@@ -2208,6 +2208,13 @@
     if (result.dest) result.dest = stripTrailingTimeInfo(result.dest);
     if (result.dropoff) result.dropoff = stripTrailingTimeInfo(result.dropoff);
 
+    // 작업지/도착지 라벨에 실제 주소가 아니라 "태양봉투 06시 착"처럼 회사명(+시간)만 적혀 있는
+    // 경우가 있음 — 이럴 땐 findDispatchAddress가 문장 다른 곳의 진짜 주소로 dest를 덮어쓰는데,
+    // 그러면서 원래 라벨에 있던 회사명이 그냥 버려짐. 화주가 따로 안 잡히면 이 회사명을
+    // 화주 후보로 재활용한다 (실제 지명이 섞여있으면 회사명이 아니라 다른 지역 언급일 수
+    // 있으니 그런 경우는 제외).
+    var labelDestBeforeAddress = result.dest;
+
     var address = findDispatchAddress(text);
     if (address) { result.dest = address; result.destIsAddress = true; }
 
@@ -2215,6 +2222,13 @@
     if (!result.client) {
       result.client = guessDispatchClient(text);
       if (result.client) result.clientGuessed = true;
+    }
+    if (!result.client && result.destIsAddress && labelDestBeforeAddress &&
+        labelDestBeforeAddress !== result.dest && labelDestBeforeAddress.length <= 20 &&
+        !new RegExp(DISPATCH_PROVINCE_RE.source).test(labelDestBeforeAddress) &&
+        !/\d/.test(labelDestBeforeAddress)) {
+      result.client = labelDestBeforeAddress;
+      result.clientGuessed = true;
     }
 
     var containerRaw = grabDispatchLabel(text, ["컨\\s*넘버", "컨테이너\\s*번호", "컨테이너\\s*No\\.?", "container\\s*no\\.?"]);
