@@ -39,6 +39,7 @@
   .drivebar.on .drivebar-dot{background:#4FBF8B}
   .drivebar.busy .drivebar-dot{animation:pulse 1s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .buildtag{font-size:10px;color:var(--mut);opacity:.5;text-align:right;padding:3px 16px 0}
 
   .searchwrap{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 16px 12px;display:flex;align-items:center;gap:8px}
   .search-ic{position:absolute;left:28px;color:var(--mut);font-size:16px;pointer-events:none}
@@ -210,6 +211,7 @@
     <span class="drivebar-dot" id="driveDot"></span>
     <span id="driveBarText">드라이브 연결 확인 중…</span>
   </div>
+  <div class="buildtag">build 2026-08-26 rev6</div>
 
   <div class="searchwrap">
     <span class="search-ic">⌕</span>
@@ -829,7 +831,8 @@
     // 표 제목/서식 번호(대괄호로 감싼 줄)나 "점검/정비의뢰일자" 같은 항목 이름줄은 실제 정비 내용이 아니므로 제외
     // "정비업자가 점검·정비를 잘못하여 다음 각 호의 기간중 발생하는 고장 등에 대하여는..." 같은 정비 관련 법정 고지문/보증안내문도
     // 실제 정비 내용이 아니므로 제외(정비업자/각 호/무상수리/고장 등 표현이 있으면 고지문으로 판단)
-    const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업내용|비\s*고|의뢰일자|완료일|^\[.*\]$|정비업자|각\s*호|무상.{0,6}정비|고장\s*등|보증\s*기간|「|제\s*\d+\s*조/;
+    // 명세서 양식 라벨줄(점검/정비 의뢰일, 정비 책임자 등)이 "정비\s" 키워드에 걸려 품목으로 잘못 뽑히는 걸 막음
+    const headerNoise=/내역|구분\b|단가|수량|공임|품목|작업\s*내용|비\s*고|의뢰\s*일\s*자?|완료\s*일|출고\s*일|등록\s*연?\s*월?\s*일|책임자|사업자\s*번호|지불\s*코드|동의\s*여부|주행\s*거리|^\[.*\]$|정비업자|각\s*호|무상.{0,6}정비|고장\s*등|보증\s*기간|「|제\s*\d+\s*조/;
     // "조수석앞"/"운전석뒤"처럼 위치만 적힌 줄은 표 칸이 나뉘어 OCR되면서 정작 항목명(다음 줄)과 떨어지는 경우가 많음 —
     // 이런 위치줄은 대기시켰다가 뒤이어 나오는 항목줄 앞에 붙여줌(먼저 나온 위치가 먼저 나오는 항목에 붙음)
     const posMarker=/^(조수석|운전석|뒷좌석|앞좌석|좌측|우측)\s*(앞|뒤)?$|^(앞|뒤|좌|우)$/;
@@ -896,7 +899,7 @@
         for(let j=o.idx+1;j<windowEnd;j++){
           numsFrom(mergedLines[j]).filter(n=>n>=1000).forEach(n=>{ if(!windowNums.includes(n))windowNums.push(n); });
         }
-        priceLines.push((k+1)+'. '+o.text+(windowNums.length?' — '+windowNums.slice(0,2).map(won).join(' / '):''));
+        priceLines.push(o.text+(windowNums.length?' — '+windowNums.slice(0,2).map(won).join(' / '):''));
       });
       if(priceLines.length){
         const extra=priceLines.join('\n');
