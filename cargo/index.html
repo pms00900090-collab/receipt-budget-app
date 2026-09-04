@@ -2270,9 +2270,12 @@
     var r = parseDispatchText(text);
 
     // 오늘 운행 기록 추가 칸에 바로 채우기
+    // 도착지(행선지)는 실제 주소(도로명/지번)를 찾았을 때만 자동저장합니다 — 회사/작업지
+    // 이름만 있으면 운행 기록(운임표)에 잘못된 값이 남을 수 있으니, 그럴 땐 비워둬서
+    // 직접 확인 후 입력하게 합니다. 아래 미리보기에는 참고용으로 원문 값을 계속 보여줍니다.
     if (r.date) document.getElementById("fDate").value = r.date;
     if (r.pickup) document.getElementById("fPickup").value = r.pickup;
-    if (r.dest) document.getElementById("fDest").value = r.dest;
+    if (r.dest && r.destIsAddress) document.getElementById("fDest").value = r.dest;
     if (r.dropoff) document.getElementById("fDropoff").value = r.dropoff;
     if (r.client) document.getElementById("fClient").value = r.client;
     if (r.containerNo) document.getElementById("fContainer").value = r.containerNo;
@@ -2287,7 +2290,7 @@
     var html = "";
     html += dispatchPreviewRow("날짜", r.date, "인식 안 됨 — 직접 선택해주세요");
     html += dispatchPreviewRow("상차지", r.pickup, "인식 안 됨");
-    html += dispatchPreviewRow("도착지", r.dest, "인식 안 됨");
+    html += dispatchPreviewRow("도착지" + (r.dest && !r.destIsAddress ? " (주소 아님 — 확인 후 직접 입력해주세요)" : ""), r.dest, "인식 안 됨");
     html += dispatchPreviewRow("하차지", r.dropoff, "해당 없음");
     html += dispatchPreviewRow("화주" + (r.clientGuessed ? " (추정 — 확인해주세요)" : ""), r.client, "인식 안 됨 — 직접 입력해주세요");
     html += dispatchPreviewRow("컨넘버", r.containerNo, "인식 안 됨");
